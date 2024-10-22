@@ -12,11 +12,11 @@ module aero_model
   use aerodep_flx,       only: aerodep_flx_prescribed
   use physics_types,     only: physics_state, physics_ptend, physics_ptend_init
   use physics_buffer,    only: physics_buffer_desc
+  use physics_buffer,    only: pbuf_get_field, pbuf_get_index
   use physconst,         only: gravit, rair
   use dust_model,        only: dust_active, dust_names, dust_nbin
   use seasalt_model,     only: sslt_active=>seasalt_active, seasalt_names, seasalt_nbin
   use spmd_utils,        only: masterproc
-  use physics_buffer,    only: pbuf_get_field, pbuf_get_index
   use cam_history,       only: outfld
   use infnan,            only: nan, assignment(=)
 
@@ -555,10 +555,12 @@ contains
           dep_grv(i)=sflx(i)*vlc_grv(i,pver,im)/vlc_dry(i,pver,im)
        enddo
 
-       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) &
-            tsflx_slt(:ncol)=tsflx_slt(:ncol)+sflx(:ncol)
-       if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) &
-            tsflx_dst(:ncol)=tsflx_dst(:ncol)+sflx(:ncol)
+       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) then
+          tsflx_slt(:ncol)=tsflx_slt(:ncol)+sflx(:ncol)
+       end if
+       if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) then
+          tsflx_dst(:ncol)=tsflx_dst(:ncol)+sflx(:ncol)
+       end if
 
        ! if the user has specified prescribed aerosol dep fluxes then
        ! do not set cam_out dep fluxes according to the prognostic aerosols
@@ -689,10 +691,12 @@ contains
        enddo
        call outfld( trim(cnst_name(mm))//'SFWET', sflx, pcols, lchnk)
 
-       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) &
-            sflx_tot_slt(:ncol) = sflx_tot_slt(:ncol) + sflx(:ncol)
-       if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) &
-            sflx_tot_dst(:ncol) = sflx_tot_dst(:ncol) + sflx(:ncol)
+       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) then
+         sflx_tot_slt(:ncol) = sflx_tot_slt(:ncol) + sflx(:ncol)
+       end if
+       if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) then
+         sflx_tot_dst(:ncol) = sflx_tot_dst(:ncol) + sflx(:ncol)
+       end if
 
        ! if the user has specified prescribed aerosol dep fluxes then
        ! do not set cam_out dep fluxes according to the prognostic aerosols
@@ -862,7 +866,7 @@ contains
           zero_aerosols = k < ltrop(i)
           if ( abs( dlat(i) ) > 50._r8 ) then
              zero_aerosols = pmid(i,k) < 30000._r8
-          endif
+          end if
           !-------------------------------------------------------------------------
           !       ... use ubvals climatology for stratospheric sulfate surface area density
           !-------------------------------------------------------------------------
@@ -1168,7 +1172,7 @@ contains
        enddo
        call outfld('DSTSFMBL',sflx(:),pcols,lchnk)
        call outfld('LND_MBL',soil_erod_tmp(:),pcols, lchnk )
-    endif
+    end if
 
     if (sslt_active) then
        u10cubed(:ncol)=sqrt(state%u(:ncol,pver)**2+state%v(:ncol,pver)**2)
@@ -1190,7 +1194,7 @@ contains
           call outfld(trim(seasalt_names(m))//'SF',cam_in%cflx(:,mm),pcols,lchnk)
        enddo
        call outfld('SSTSFMBL',sflx(:),pcols,lchnk)
-    endif
+    end if
 
   end subroutine aero_model_emissions
 
