@@ -180,7 +180,7 @@ contains
     use mo_setsoa,      only: soa_inti
     use dust_model,     only: dust_init
     use seasalt_model,  only: seasalt_init
-    use aer_drydep_mod, only: inidrydep
+    use drydep_mod,     only: inidrydep
     use wetdep,         only: wetdep_init
     use mo_setsox,      only: has_sox
 
@@ -425,7 +425,7 @@ contains
   subroutine aero_model_drydep  ( state, pbuf, obklen, ustar, cam_in, dt, cam_out, ptend )
 
     use dust_sediment_mod, only: dust_sediment_tend
-    use aer_drydep_mod,    only: d3ddflux, calcram
+    use drydep_mod,    only: d3ddflux, calcram
     use dust_model,        only: dust_depvel, dust_nbin, dust_names
     use seasalt_model,     only: sslt_depvel=>seasalt_depvel, sslt_nbin=>seasalt_nbin, sslt_names=>seasalt_names
 
@@ -458,7 +458,7 @@ contains
     integer, parameter :: enddst = sslt_nbin+dust_nbin
 
     integer :: ncol, lchnk
-
+! replace aeronames?
     character(len=6) :: aeronames(naero) ! = (/ sslt_names, dust_names /)
 
     real(r8) :: vlc_trb(pcols,naero)    !Turbulent deposn velocity (m/s)
