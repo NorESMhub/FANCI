@@ -15,7 +15,7 @@ module aero_model
   use physics_buffer,    only: pbuf_get_field, pbuf_get_index
   use physconst,         only: gravit, rair
   use dust_model,        only: dust_active, dust_names, dust_nbin
-  use seasalt_model,     only: sslt_active=>seasalt_active, seasalt_names, seasalt_nbin
+  use seasalt_model,     only: seasalt_active, seasalt_names, seasalt_nbin
   use spmd_utils,        only: masterproc
   use cam_history,       only: outfld
   use infnan,            only: nan, assignment(=)
@@ -294,7 +294,7 @@ contains
           call add_default (dummy, 1, ' ')
        endif
 
-       if (sslt_active) then
+       if (seasalt_active) then
           dummy = 'SSTSFDRY'
           call addfld (dummy,horiz_only, 'A','kg/m2/s','Sea salt deposition flux at surface')
           if ( history_aerosol ) then
@@ -336,7 +336,7 @@ contains
     enddo
 
     if (nwetdep>0) then
-       if (sslt_active) then
+       if (seasalt_active) then
           dummy = 'SSTSFWET'
           call addfld (dummy,horiz_only, 'A','kg/m2/s','Sea salt wet deposition flux at surface')
           if ( history_aerosol ) then
@@ -377,7 +377,7 @@ contains
 
     endif
 
-    if (sslt_active) then
+    if (seasalt_active) then
 
        dummy = 'SSTSFMBL'
        call addfld (dummy,horiz_only, 'A','kg/m2/s','Mobilization flux at surface')
@@ -427,7 +427,7 @@ contains
     use dust_sediment_mod, only: dust_sediment_tend
     use drydep_mod,    only: d3ddflux, calcram
     use dust_model,        only: dust_depvel, dust_nbin, dust_names
-    use seasalt_model,     only: sslt_depvel=>seasalt_depvel, sslt_nbin=>seasalt_nbin, sslt_names=>seasalt_names
+    use seasalt_model,     only: seasalt_depvel, seasalt_nbin, seasalt_names
 
     ! args
     type(physics_state),    intent(in)    :: state     ! Physics state variables
@@ -451,15 +451,15 @@ contains
 
      ! local decarations
 
-    integer, parameter :: naero = sslt_nbin+dust_nbin
+    integer, parameter :: naero = seasalt_nbin+dust_nbin
     integer, parameter :: begslt = 1
-    integer, parameter :: endslt = sslt_nbin
-    integer, parameter :: begdst = sslt_nbin+1
-    integer, parameter :: enddst = sslt_nbin+dust_nbin
+    integer, parameter :: endslt = seasalt_nbin
+    integer, parameter :: begdst = seasalt_nbin+1
+    integer, parameter :: enddst = seasalt_nbin+dust_nbin
 
     integer :: ncol, lchnk
 ! replace aeronames?
-    character(len=6) :: aeronames(naero) ! = (/ sslt_names, dust_names /)
+    character(len=6) :: aeronames(naero) ! = (/ seasalt_names, dust_names /)
 
     real(r8) :: vlc_trb(pcols,naero)    !Turbulent deposn velocity (m/s)
     real(r8) :: vlc_grv(pcols,pver,naero)  !grav deposn velocity (m/s)
@@ -502,8 +502,8 @@ contains
 
     call physics_ptend_init(ptend, state%psetcols, 'aero_model_drydep', lq=drydep_lq)
 
-    aeronames(:sslt_nbin)   = sslt_names(:)
-    aeronames(sslt_nbin+1:) = dust_names(:)
+    aeronames(:seasalt_nbin)   = seasalt_names(:)
+    aeronames(seasalt_nbin+1:) = dust_names(:)
 
     lchnk = state%lchnk
     ncol  = state%ncol
@@ -512,8 +512,8 @@ contains
     rho(:ncol,:) = state%pmid(:ncol,:)/(rair*state%t(:ncol,:))
 
     ! compute dep velocities for sea salt and dust...
-    if (sslt_active) then
-       call sslt_depvel( state%t(:,:), state%pmid(:,:), state%q(:,:,1), ram1, fv, ncol, lchnk, &
+    if (seasalt_active) then
+       call seasalt_depvel( state%t(:,:), state%pmid(:,:), state%q(:,:,1), ram1, fv, ncol, lchnk, &
                          vlc_dry(:,:,begslt:endslt), vlc_trb(:,begslt:endslt), vlc_grv(:,:,begslt:endslt))
     endif
     if (dust_active) then
@@ -521,8 +521,8 @@ contains
                          vlc_dry(:,:,begdst:enddst), vlc_trb(:,begdst:enddst), vlc_grv(:,:,begdst:enddst) )
     endif
 
-    tsflx_dst(:)=0._r8
-    tsflx_slt(:)=0._r8
+    tsflx_dst(:) = 0._r8
+    tsflx_slt(:) = 0._r8
 
     ! do drydep for each of the bins of dust and seasalt
     do m=1,ndrydep
@@ -532,7 +532,7 @@ contains
          if (trim(cnst_name(mm))==trim(aeronames(im))) exit findindex
        enddo findindex
 
-       pvaeros(:ncol,1)=0._r8
+       pvaeros(:ncol,1) = 0._r8
        pvaeros(:ncol,2:pverp) = vlc_dry(:ncol,:,im)
 
        call outfld( trim(cnst_name(mm))//'DV', pvaeros(:,2:pverp), pcols, lchnk )
@@ -555,13 +555,13 @@ contains
           dep_grv(i)=sflx(i)*vlc_grv(i,pver,im)/vlc_dry(i,pver,im)
        enddo
 
-       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) then
+       if ( any( seasalt_names(:)==trim(cnst_name(mm)) ) ) then
           tsflx_slt(:ncol)=tsflx_slt(:ncol)+sflx(:ncol)
        end if
        if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) then
           tsflx_dst(:ncol)=tsflx_dst(:ncol)+sflx(:ncol)
        end if
-
+! Prescribed deposition, do we need this?
        ! if the user has specified prescribed aerosol dep fluxes then
        ! do not set cam_out dep fluxes according to the prognostic aerosols
        if (.not. aerodep_flx_prescribed()) then
@@ -585,7 +585,7 @@ contains
     end do
 
     ! output the total dry deposition
-    if (sslt_active) then
+    if (seasalt_active) then
        call outfld( 'SSTSFDRY', tsflx_slt, pcols, lchnk)
     endif
     if (dust_active) then
@@ -600,7 +600,7 @@ contains
 
     use wetdep,        only : wetdepa_v1, wetdep_inputs_set, wetdep_inputs_t
     use dust_model,    only : dust_names
-    use seasalt_model, only : sslt_names=>seasalt_names
+    use seasalt_model, only : seasalt_names
 
     ! args
 
@@ -691,7 +691,7 @@ contains
        enddo
        call outfld( trim(cnst_name(mm))//'SFWET', sflx, pcols, lchnk)
 
-       if ( any( sslt_names(:)==trim(cnst_name(mm)) ) ) then
+       if ( any( seasalt_names(:)==trim(cnst_name(mm)) ) ) then
          sflx_tot_slt(:ncol) = sflx_tot_slt(:ncol) + sflx(:ncol)
        end if
        if ( any( dust_names(:)==trim(cnst_name(mm)) ) ) then
@@ -719,7 +719,7 @@ contains
 
     enddo
 
-    if (sslt_active) then
+    if (seasalt_active) then
        call outfld( 'SSTSFWET', sflx_tot_slt, pcols, lchnk)
     endif
     if (dust_active) then
@@ -1029,7 +1029,7 @@ contains
   ! stub
   !-------------------------------------------------------------------------
   subroutine aero_model_strat_surfarea( ncol, mmr, pmid, temp, ltrop, pbuf, strato_sad, reff_strat )
-
+! no stratospheric aerosol?
     ! dummy args
     integer,  intent(in)    :: ncol
     real(r8), intent(in)    :: mmr(:,:,:)
@@ -1167,22 +1167,22 @@ contains
        sflx(:)=0._r8
        do m=1,dust_nbin
           mm = dust_indices(m)
-          sflx(:ncol)=sflx(:ncol)+cam_in%cflx(:ncol,mm)
+          sflx(:ncol) = sflx(:ncol)+cam_in%cflx(:ncol,mm)
           call outfld(trim(dust_names(m))//'SF',cam_in%cflx(:,mm),pcols, lchnk)
        enddo
        call outfld('DSTSFMBL',sflx(:),pcols,lchnk)
        call outfld('LND_MBL',soil_erod_tmp(:),pcols, lchnk )
     end if
 
-    if (sslt_active) then
-       u10cubed(:ncol)=sqrt(state%u(:ncol,pver)**2+state%v(:ncol,pver)**2)
+    if (seasalt_active) then
+       u10cubed(:ncol) = sqrt(state%u(:ncol,pver)**2+state%v(:ncol,pver)**2)
        ! move the winds to 10m high from the midpoint of the gridbox:
        ! follows Tie and Seinfeld and Pandis, p.859 with math.
 
-       u10cubed(:ncol)=u10cubed(:ncol)*log(10._r8/z0)/log(state%zm(:ncol,pver)/z0)
+       u10cubed(:ncol) = u10cubed(:ncol)*log(10._r8/z0)/log(state%zm(:ncol,pver)/z0)
 
        ! we need them to the 3.41 power, according to Gong et al., 1997:
-       u10cubed(:ncol)=u10cubed(:ncol)**3.41_r8
+       u10cubed(:ncol) = u10cubed(:ncol)**3.41_r8
 
        sflx(:)=0._r8
 
@@ -1190,7 +1190,7 @@ contains
 
        do m=1,seasalt_nbin
           mm = seasalt_indices(m)
-          sflx(:ncol)=sflx(:ncol)+cam_in%cflx(:ncol,mm)
+          sflx(:ncol) = sflx(:ncol)+cam_in%cflx(:ncol,mm)
           call outfld(trim(seasalt_names(m))//'SF',cam_in%cflx(:,mm),pcols,lchnk)
        enddo
        call outfld('SSTSFMBL',sflx(:),pcols,lchnk)
