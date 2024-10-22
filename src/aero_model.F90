@@ -14,8 +14,6 @@ module aero_model
   use physics_buffer,    only: physics_buffer_desc
   use physics_buffer,    only: pbuf_get_field, pbuf_get_index
   use physconst,         only: gravit, rair
-  use dust_model,        only: dust_active, dust_names, dust_nbin
-  use seasalt_model,     only: seasalt_active, seasalt_names, seasalt_nbin
   use spmd_utils,        only: masterproc
   use cam_history,       only: outfld
   use infnan,            only: nan, assignment(=)
@@ -178,8 +176,8 @@ contains
     use phys_control,   only: phys_getopts
     use mo_aerosols,    only: aerosols_inti
     use mo_setsoa,      only: soa_inti
-    use dust_model,     only: dust_init
-    use seasalt_model,  only: seasalt_init
+    use dust_model,     only: dust_init, dust_names, dust_nbin
+    use seasalt_model,  only: seasalt_init, seasalt_active, seasalt_names, seasalt_nbin
     use drydep_mod,     only: inidrydep
     use wetdep,         only: wetdep_init
     use mo_setsox,      only: has_sox
@@ -426,8 +424,8 @@ contains
 
     use dust_sediment_mod, only: dust_sediment_tend
     use drydep_mod,    only: d3ddflux, calcram
-    use dust_model,        only: dust_depvel, dust_nbin, dust_names
-    use seasalt_model,     only: seasalt_depvel, seasalt_nbin, seasalt_names
+    use dust_model,        only: dust_depvel, dust_nbin, dust_names, dust_active
+    use seasalt_model,     only: seasalt_depvel, seasalt_nbin, seasalt_names, seasalt_active
 
     ! args
     type(physics_state),    intent(in)    :: state     ! Physics state variables
@@ -600,7 +598,7 @@ contains
 
     use wetdep,        only : wetdepa_v1, wetdep_inputs_set, wetdep_inputs_t
     use dust_model,    only : dust_names
-    use seasalt_model, only : seasalt_names
+    use seasalt_model, only : seasalt_names, seasalt_active
 
     ! args
 
@@ -1138,8 +1136,8 @@ contains
   !=============================================================================
   !=============================================================================
   subroutine aero_model_emissions( state, cam_in )
-    use seasalt_model, only: seasalt_emis, seasalt_indices
-    use dust_model,    only: dust_emis, dust_indices
+    use seasalt_model, only: seasalt_emis, seasalt_indices, seasalt_active, seasalt_names, seasalt_nbin
+    use dust_model,    only: dust_emis, dust_indices, dust_active, dust_names, dust_nbin
     use physics_types, only: physics_state
 
     ! Arguments:
