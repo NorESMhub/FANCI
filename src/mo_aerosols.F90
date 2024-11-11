@@ -5,7 +5,7 @@ module mo_aerosols
   ! using the formulation by Seinfeld and Pandis (p531, 1998)
   ! with the simplification of activity coefficients and
   ! aerosol molality using the parameterizations
-  ! from Metzger et al. (JGR, ACH-16, 107(D16), 2002) 
+  ! from Metzger et al. (JGR, ACH-16, 107(D16), 2002)
   !
   ! written by Jean-Francois Lamarque (April 2004)
   ! adapted for CAM (May 2004)
@@ -14,10 +14,10 @@ module mo_aerosols
 
   use shr_kind_mod, only : r8 => shr_kind_r8
   use ppgrid,       only : pver
-  use cam_logfile,  only: iulog
+  use cam_logfile,  only : iulog
 
   private
-  public :: aerosols_inti,aerosols_formation
+  public :: aerosols_inti, aerosols_formation
   public :: has_aerosols
 
   save
@@ -86,7 +86,7 @@ contains
     end if
 
     !
-    ! define parameters 
+    ! define parameters
     !
     ! ammonium nitrate (NH4NO3)
     !
@@ -104,13 +104,13 @@ contains
 
     return
   end subroutine aerosols_inti
-  
+
   subroutine aerosols_formation( ncol, lchnk, tfld, rh, qin)
 
     use ppgrid, only        : pcols, pver
     use chem_mods,  only    : gas_pcnst, adv_mass
     use cam_history, only   : outfld
-    
+
     implicit none
     !
     ! input arguments
@@ -160,13 +160,13 @@ contains
           if ( tnh3 < tso4(i,k) ) then
              domain_number = 4
              sulfate_state = 1.0_r8
-          elseif ( tnh3 < 2._r8*tso4(i,k) ) then
+          else if ( tnh3 < 2._r8*tso4(i,k) ) then
              domain_number = 3
              sulfate_state = 1.5_r8
           else
              domain_number = 2
              sulfate_state = 2.0_r8
-          endif
+          end if
           !
           ! define free ammonia (ammonia available for ammonium nitrate production)
           !

@@ -178,7 +178,7 @@ contains
     use mo_setsoa,      only: soa_inti
     use dust_model,     only: dust_init, dust_names, dust_nbin
     use seasalt_model,  only: seasalt_init, seasalt_active, seasalt_names, seasalt_nbin
-    use drydep_mod,     only: inidrydep
+    use aer_drydep_mod, only: inidrydep
     use wetdep,         only: wetdep_init
     use mo_setsox,      only: has_sox
 
@@ -423,7 +423,7 @@ contains
   subroutine aero_model_drydep  ( state, pbuf, obklen, ustar, cam_in, dt, cam_out, ptend )
 
     use dust_sediment_mod, only: dust_sediment_tend
-    use drydep_mod,    only: d3ddflux, calcram
+    use aer_drydep_mod,    only: d3ddflux, calcram
     use dust_model,        only: dust_depvel, dust_nbin, dust_names, dust_active
     use seasalt_model,     only: seasalt_depvel, seasalt_nbin, seasalt_names, seasalt_active
 
