@@ -55,7 +55,7 @@ then next time
 module r mod_noresm
 
 ```
-Then run: 
+Then run:
 
 ```bash
 ./bin/git-fleximod update
@@ -72,7 +72,7 @@ This checks out `src/chemistry/FANCI` and the other externals at their pinned co
 cd src/chemistry/FANCI
 git remote set-url origin https://github.com/<GITHUB_USER>/FANCI.git
 git remote add christinafork https://github.com/Trudigard/FANCI.git
-git fetch christinafork 
+git fetch christinafork
 git checkout -b <your_branch_name> christinafork/saltydust
 cd -
 ```
@@ -87,13 +87,13 @@ cd -
 From the `CAM_SEC` root:
 
 ```bash
-./cime/scripts/create_test --xml-category test_sectional --xml-machine olivia -r /cluster/work/projects/nn9560k/$USER/ -p NN9560K --output-root /cluster/work/projects/nn9560k/$USER/
+./cime/scripts/create_test --xml-category aux_fanci --xml-machine olivia -r /cluster/work/projects/nn9560k/$USER/ -p NN9560K --output-root /cluster/work/projects/nn9560k/$USER/
 ```
 
 To run a **single** test instead of the whole category, name it explicitly, e.g.:
 (COMPSET='SecDust')
 ```bash
-./cime/scripts/create_test SMS_Ln9.ne16pg3_ne16pg3_mtn14.<COMPSET>.olivia_intel \
+./cime/scripts/create_test SMS_Ln9.ne16pg3_ne16pg3_mtn14.<COMPSET>.olivia_gnu \
   -r /cluster/work/projects/nn9560k/$USER/ -p NN9560K \
   --output-root /cluster/work/projects/nn9560k/$USER/
 ```
