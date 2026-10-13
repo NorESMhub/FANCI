@@ -11,7 +11,7 @@ module dust_model
   use shr_dust_emis_mod,only: is_dust_emis_zender, is_zender_soil_erod_from_atm
 
   use aerosol_properties_mod, only: aerosol_properties
-  use sectional_aerosol_properties_mod, only: sectional_aerosol_properties
+  use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
 
   implicit none
   private
@@ -118,7 +118,7 @@ contains
 
    ! use soil_erod_mod, only: soil_erod_init ! TODO, QUESTION: Oslo_aero has its own nearly identical version, why?
 
-    type(sectional_aerosol_properties), intent(in) :: aero_props
+    type(fanci_aerosol_properties), intent(in) :: aero_props
 
     ! local variables
     integer               :: ispecprop, ind, istat, ibin, irange, idustspec
@@ -165,7 +165,7 @@ contains
     use constituents,    only: pcnst
 
     ! Arguments:
-    type(sectional_aerosol_properties), intent(in) :: aero_props
+    type(fanci_aerosol_properties), intent(in) :: aero_props
     integer  , intent(in)    :: lchnk
     integer  , intent(in)    :: ncol
     real(r8) , intent(in)    :: dust_flux_in(:,:)   ! Leung emissions (?)
@@ -202,7 +202,7 @@ contains
         end where
 
 ! TODO: loop through all bins/ranges, have object deal with species_nbins/species_nranges?
-    ! Sectional model: dust is emitted to the bins, then transferred to ranges
+    ! fanci model: dust is emitted to the bins, then transferred to ranges
     ! TODO: check compatability with bins! this needs to be number concentration, mass to ranges
         do ibin = 1, aero_props%spec_nbin(spectype='dust')
 
@@ -365,7 +365,7 @@ contains
 
     ! input
     integer, intent(in)  :: nbin
-    type(sectional_aerosol_properties), intent(in) :: aero_props
+    type(fanci_aerosol_properties), intent(in) :: aero_props
 
     ! local variables
     real(r8)             :: vol(nbin)                 ! volume in each subinterval

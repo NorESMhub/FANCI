@@ -1,4 +1,4 @@
-module sectional_aerosol_properties_mod
+module fanci_aerosol_properties_mod
   use shr_kind_mod, only: r8 => shr_kind_r8
   use physconst, only: pi
   use aerosol_properties_mod, only: aerosol_properties, aero_name_len
@@ -12,7 +12,7 @@ module sectional_aerosol_properties_mod
 
   private
 
-  public :: sectional_aerosol_properties
+  public :: fanci_aerosol_properties
 
   type aerosol_species_properties
      character(len=:), allocatable :: specname        ! e.g. DU
@@ -29,7 +29,7 @@ module sectional_aerosol_properties_mod
      character(len=10), allocatable :: tracernames(:) ! e.g. DU_R3
      end type aerosol_species_properties
 
-  type, extends(aerosol_properties) :: sectional_aerosol_properties
+  type, extends(aerosol_properties) :: fanci_aerosol_properties
      private
      integer               :: nranges_ = 0
      integer               :: nspecies_tot_ = 0
@@ -89,14 +89,14 @@ module sectional_aerosol_properties_mod
      procedure :: spec_bin_q_ndx  ! done
      procedure :: spec_mmr_q_ndx  ! done
      final :: destructor
-  end type sectional_aerosol_properties
+  end type fanci_aerosol_properties
 
-  interface sectional_aerosol_properties
+  interface fanci_aerosol_properties
      procedure :: constructor
-  end interface sectional_aerosol_properties
+  end interface fanci_aerosol_properties
 
   logical, parameter :: debug = .false.
-  type(sectional_aerosol_properties), pointer :: prop_obj => null()
+  type(fanci_aerosol_properties), pointer :: prop_obj => null()
 
 
 contains
@@ -109,7 +109,7 @@ contains
     use namelist_utils,    only: find_group_name
     use infnan,            only: nan, assignment(=)
 
-    type(sectional_aerosol_properties), pointer :: newobj
+    type(fanci_aerosol_properties), pointer :: newobj
 
     character(len=*),optional, intent(in) :: nlfile
     integer                      :: ncnst_tot=0
@@ -127,25 +127,25 @@ contains
     integer                      :: ind, ibin, irange, ispec
 
     ! namelist variables
-    integer               :: oslo_sectional_nbins
-    integer               :: oslo_sectional_nranges
-    integer               :: oslo_sectional_nspecies_tot
-    integer               :: oslo_sectional_nspecies(500) ! range_nspecies TODO: make allocatable!!
+    integer               :: fanci_nbins
+    integer               :: fanci_nranges
+    integer               :: fanci_nspecies_tot
+    integer               :: fanci_nspecies(500) ! range_nspecies TODO: make allocatable!!
     integer, parameter    :: strlen=50
 
-    character(len=strlen) :: oslo_sectional_bin_centers(500)
-    character(len=strlen) :: oslo_sectional_bin_bounds(500)
-    character(len=strlen) :: oslo_sectional_range_bounds(500)
+    character(len=strlen) :: fanci_bin_centers(500)
+    character(len=strlen) :: fanci_bin_bounds(500)
+    character(len=strlen) :: fanci_range_bounds(500)
 
     ! namelist aerosol species variables
-    type(aerosol_species_properties), allocatable :: oslo_sectional_species_properties(:)
-    character(len=10)                     :: oslo_sectional_aerosol_name
-    character(len=10)                     :: oslo_sectional_aerosol_type
-    character(len=10)                     :: oslo_sectional_aerosol_range
-    real(r8)                              :: oslo_sectional_aerosol_density
-    real(r8)                              :: oslo_sectional_aerosol_weight
-    real(r8)                              :: oslo_sectional_aerosol_kappa
-    logical                               :: oslo_sectional_aerosol_mixed
+    type(aerosol_species_properties), allocatable :: fanci_species_properties(:)
+    character(len=10)                     :: fanci_aerosol_name
+    character(len=10)                     :: fanci_aerosol_type
+    character(len=10)                     :: fanci_aerosol_range
+    real(r8)                              :: fanci_aerosol_density
+    real(r8)                              :: fanci_aerosol_weight
+    real(r8)                              :: fanci_aerosol_kappa
+    logical                               :: fanci_aerosol_mixed
 
     character(len=aero_name_len) :: spectype
 
@@ -156,201 +156,201 @@ contains
 !==================================================================================================
 
       ! Namelists (constructed in bin_config.py)
-    namelist /oslo_sectional_properties_nl/ oslo_sectional_nspecies_tot, &
-                                            oslo_sectional_nspecies, &
-                                            oslo_sectional_nbins, &
-                                            oslo_sectional_nranges, &
-                                            oslo_sectional_bin_bounds, &
-                                            oslo_sectional_bin_centers, &
-                                            oslo_sectional_range_bounds
+    namelist /fanci_properties_nl/ fanci_nspecies_tot, &
+                                            fanci_nspecies, &
+                                            fanci_nbins, &
+                                            fanci_nranges, &
+                                            fanci_bin_bounds, &
+                                            fanci_bin_centers, &
+                                            fanci_range_bounds
 
-    namelist /oslo_sectional_properties_aerosol_nl/ oslo_sectional_aerosol_name, &
-                                            oslo_sectional_aerosol_type, &
-                                            oslo_sectional_aerosol_range, &
-                                            oslo_sectional_aerosol_density, &
-                                            oslo_sectional_aerosol_weight, &
-                                            oslo_sectional_aerosol_mixed, &
-                                            oslo_sectional_aerosol_kappa
+    namelist /fanci_properties_aerosol_nl/ fanci_aerosol_name, &
+                                            fanci_aerosol_type, &
+                                            fanci_aerosol_range, &
+                                            fanci_aerosol_density, &
+                                            fanci_aerosol_weight, &
+                                            fanci_aerosol_mixed, &
+                                            fanci_aerosol_kappa
     if ( present(nlfile) ) then
 
         if ( associated(prop_obj) ) then
-            call endrun(subname//':: ERROR sectional_aerosol_properties has already been initialized')
+            call endrun(subname//':: ERROR fanci_aerosol_properties has already been initialized')
         end if
         ! initialize variables
-        oslo_sectional_nspecies_tot = 0
-        oslo_sectional_nspecies = 0
-        oslo_sectional_nbins = 0
-        oslo_sectional_nranges = 0
-        oslo_sectional_bin_centers = ''
-        oslo_sectional_bin_bounds = ''
-        oslo_sectional_range_bounds = ''
+        fanci_nspecies_tot = 0
+        fanci_nspecies = 0
+        fanci_nbins = 0
+        fanci_nranges = 0
+        fanci_bin_centers = ''
+        fanci_bin_bounds = ''
+        fanci_range_bounds = ''
 
         ! read aerosol properties namelist
         if (masterproc) then
             open(newunit=unitn, file=trim(nlfile), status='old')
-            call find_group_name(unitn, 'oslo_sectional_properties_nl', ierr)
+            call find_group_name(unitn, 'fanci_properties_nl', ierr)
             if ( ierr /= 0 ) then
                 close(unitn)
-                call endrun(subname//":: ERROR could not find group 'oslo_sectional_properties_nl'")
+                call endrun(subname//":: ERROR could not find group 'fanci_properties_nl'")
             end if
 
-            read(unitn, oslo_sectional_properties_nl, iostat=ierr)
+            read(unitn, fanci_properties_nl, iostat=ierr)
             if ( ierr /= 0 ) then
                 close(unitn)
-                call endrun(subname // ':: ERROR reading oslo_sectional_properties_nl namelist')
+                call endrun(subname // ':: ERROR reading fanci_properties_nl namelist')
             end if
         end if
 
 !==================================================================================================
-! Broadcast oslo_sectional_properties
+! Broadcast fanci_properties
 !==================================================================================================
-        call MPI_Bcast(oslo_sectional_nspecies_tot, 1, mpi_integer, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_nspecies_tot, 1, mpi_integer, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_nspecies_tot'")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_nspecies_tot'")
         end if
 
-        call MPI_Bcast(oslo_sectional_nspecies, size(oslo_sectional_nspecies), mpi_integer, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_nspecies, size(fanci_nspecies), mpi_integer, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_nspecies'")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_nspecies'")
         end if
 
-        call MPI_Bcast(oslo_sectional_nbins, 1, mpi_integer, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_nbins, 1, mpi_integer, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_nbins'")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_nbins'")
         end if
 
-        call MPI_Bcast(oslo_sectional_nranges, 1, mpi_integer, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_nranges, 1, mpi_integer, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_nranges'")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_nranges'")
         end if
 
-        call MPI_Bcast(oslo_sectional_bin_bounds, strlen*size(oslo_sectional_bin_bounds), mpi_character, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_bin_bounds, strlen*size(fanci_bin_bounds), mpi_character, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_bin_bounds'")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_bin_bounds'")
         end if
 
-        call MPI_Bcast(oslo_sectional_bin_centers, strlen*size(oslo_sectional_bin_centers), mpi_character, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_bin_centers, strlen*size(fanci_bin_centers), mpi_character, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_bin_centers")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_bin_centers")
         end if
 
-        call MPI_Bcast(oslo_sectional_range_bounds, strlen*size(oslo_sectional_range_bounds), mpi_character, mstrid, mpicom, ierr)
+        call MPI_Bcast(fanci_range_bounds, strlen*size(fanci_range_bounds), mpi_character, mstrid, mpicom, ierr)
         if ( ierr /= MPI_SUCCESS ) then
-            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_range_bounds")
+            call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_range_bounds")
         end if
 
 !==================================================================================================
 ! Read and broadcast aerosol species properties namelist in sequence
 !==================================================================================================
  !    allocate array for species objects
-        allocate(oslo_sectional_species_properties(oslo_sectional_nspecies_tot), stat=ierr)
+        allocate(fanci_species_properties(fanci_nspecies_tot), stat=ierr)
         if(ierr/=0) then
             if (masterproc) close(unitn)
-            call endrun(subname// ": ERROR "//int2str(ierr)//" allocating oslo_sectional_species_properties")
+            call endrun(subname// ": ERROR "//int2str(ierr)//" allocating fanci_species_properties")
         end if
 
-        do ispec=1,oslo_sectional_nspecies_tot
+        do ispec=1,fanci_nspecies_tot
 
             ! namelist variables
-            oslo_sectional_aerosol_name = ''
-            oslo_sectional_aerosol_type = ''
-            oslo_sectional_aerosol_range = ''
-            oslo_sectional_aerosol_density = 0.0_r8
-            oslo_sectional_aerosol_weight = 0.0_r8
-            oslo_sectional_aerosol_kappa = 0.0_r8
-            oslo_sectional_aerosol_mixed = .false.
+            fanci_aerosol_name = ''
+            fanci_aerosol_type = ''
+            fanci_aerosol_range = ''
+            fanci_aerosol_density = 0.0_r8
+            fanci_aerosol_weight = 0.0_r8
+            fanci_aerosol_kappa = 0.0_r8
+            fanci_aerosol_mixed = .false.
             lower = 0
             upper = 0
 
             ! read namelist
             if (masterproc) then
-                call find_group_name(unitn, 'oslo_sectional_properties_aerosol_nl', ierr)
+                call find_group_name(unitn, 'fanci_properties_aerosol_nl', ierr)
                 if (ierr /= 0) then
                     close(unitn)
-                    call endrun(subname//":: ERROR could not find group 'oslo_sectional_properties_aerosol_nl' for species number " &
-                    //int2str(ispec)//'of '//int2str(oslo_sectional_nspecies_tot) )
+                    call endrun(subname//":: ERROR could not find group 'fanci_properties_aerosol_nl' for species number " &
+                    //int2str(ispec)//'of '//int2str(fanci_nspecies_tot) )
                 end if
 
-                read(unitn, oslo_sectional_properties_aerosol_nl, iostat=ierr)
+                read(unitn, fanci_properties_aerosol_nl, iostat=ierr)
                 if (ierr /= 0) then
                     close(unitn)
-                    call endrun(subname // ":: ERROR reading 'oslo_sectional_properties_aerosol_nl' for species number " &
-                    //int2str(ispec)//'of '//int2str(oslo_sectional_nspecies_tot) )
+                    call endrun(subname // ":: ERROR reading 'fanci_properties_aerosol_nl' for species number " &
+                    //int2str(ispec)//'of '//int2str(fanci_nspecies_tot) )
                 end if
 
             end if
 
             ! broadcast
-            call MPI_Bcast(oslo_sectional_aerosol_name, len(oslo_sectional_aerosol_name), mpi_character, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_name, len(fanci_aerosol_name), mpi_character, mstrid, mpicom, ierr)
             if ( ierr /= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_name'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_name'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_type, len(oslo_sectional_aerosol_type), mpi_character, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_type, len(fanci_aerosol_type), mpi_character, mstrid, mpicom, ierr)
             if ( ierr /= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_type'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_type'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_range, len(oslo_sectional_aerosol_range), mpi_character, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_range, len(fanci_aerosol_range), mpi_character, mstrid, mpicom, ierr)
             if ( ierr /= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_range'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_range'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_density, 1, mpi_real8, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_density, 1, mpi_real8, mstrid, mpicom, ierr)
             if ( ierr/= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_density'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_density'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_weight, 1, mpi_real8, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_weight, 1, mpi_real8, mstrid, mpicom, ierr)
             if ( ierr/= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_weight'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_weight'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_kappa, 1, mpi_real8, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_kappa, 1, mpi_real8, mstrid, mpicom, ierr)
             if ( ierr/= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_kappa'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_kappa'")
             end if
 
-            call MPI_Bcast(oslo_sectional_aerosol_mixed, 1, mpi_logical, mstrid, mpicom, ierr)
+            call MPI_Bcast(fanci_aerosol_mixed, 1, mpi_logical, mstrid, mpicom, ierr)
             if ( ierr/= MPI_SUCCESS ) then
-                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'oslo_sectional_aerosol_mixed'")
+                call endrun(subname//": Error "//int2str(ierr)//" broadcasting 'fanci_aerosol_mixed'")
             end if
 
             ! initialize properties object variables
-            oslo_sectional_species_properties(ispec)%specname = ''
-            oslo_sectional_species_properties(ispec)%density = 0.0_r8
-            oslo_sectional_species_properties(ispec)%molecular_weight = 0.0_r8
-            oslo_sectional_species_properties(ispec)%kappa = 0.0_r8
-            oslo_sectional_species_properties(ispec)%mixed = .false.
-            oslo_sectional_species_properties(ispec)%nbin = 0
-            oslo_sectional_species_properties(ispec)%nrange = 0
+            fanci_species_properties(ispec)%specname = ''
+            fanci_species_properties(ispec)%density = 0.0_r8
+            fanci_species_properties(ispec)%molecular_weight = 0.0_r8
+            fanci_species_properties(ispec)%kappa = 0.0_r8
+            fanci_species_properties(ispec)%mixed = .false.
+            fanci_species_properties(ispec)%nbin = 0
+            fanci_species_properties(ispec)%nrange = 0
 
-            pos = index(oslo_sectional_aerosol_range, ':')
+            pos = index(fanci_aerosol_range, ':')
 
             if ( pos == 0 ) then
-                call endrun(subname//":: ERROR invalid format for 'oslo_sectional_aerosol_range'")
+                call endrun(subname//":: ERROR invalid format for 'fanci_aerosol_range'")
             end if
 
-            read(oslo_sectional_aerosol_range(1:pos-1), *) lower
-            read(oslo_sectional_aerosol_range(pos+1:), *) upper
+            read(fanci_aerosol_range(1:pos-1), *) lower
+            read(fanci_aerosol_range(pos+1:), *) upper
 
-            oslo_sectional_species_properties(ispec)%nrange = upper - lower + 1
-            oslo_sectional_species_properties(ispec)%specname = oslo_sectional_aerosol_name
-            oslo_sectional_species_properties(ispec)%spectype = oslo_sectional_aerosol_type
-            oslo_sectional_species_properties(ispec)%density = oslo_sectional_aerosol_density
-            oslo_sectional_species_properties(ispec)%molecular_weight = oslo_sectional_aerosol_weight
-            oslo_sectional_species_properties(ispec)%kappa = oslo_sectional_aerosol_kappa
-            oslo_sectional_species_properties(ispec)%mixed = oslo_sectional_aerosol_mixed
+            fanci_species_properties(ispec)%nrange = upper - lower + 1
+            fanci_species_properties(ispec)%specname = fanci_aerosol_name
+            fanci_species_properties(ispec)%spectype = fanci_aerosol_type
+            fanci_species_properties(ispec)%density = fanci_aerosol_density
+            fanci_species_properties(ispec)%molecular_weight = fanci_aerosol_weight
+            fanci_species_properties(ispec)%kappa = fanci_aerosol_kappa
+            fanci_species_properties(ispec)%mixed = fanci_aerosol_mixed
 
             ! allocate and initialize range_ndx, and tracernames
-            allocate(oslo_sectional_species_properties(ispec)%range_ndx(oslo_sectional_species_properties(ispec)%nrange), stat=ierr)
+            allocate(fanci_species_properties(ispec)%range_ndx(fanci_species_properties(ispec)%nrange), stat=ierr)
             if(ierr/=0) then
-                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating oslo_sectional_species_properties range_ndx")
+                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating fanci_species_properties range_ndx")
             end if
-            oslo_sectional_species_properties(ispec)%range_ndx = 0
+            fanci_species_properties(ispec)%range_ndx = 0
 
             do ind = 1, (upper - lower + 1)
-                oslo_sectional_species_properties(ispec)%range_ndx(ind) = lower + ind - 1
+                fanci_species_properties(ispec)%range_ndx(ind) = lower + ind - 1
             end do
 
         end do
@@ -364,56 +364,56 @@ contains
 !==================================================================================================
 
         ! allocate with size nbins
-        allocate( nspecies(oslo_sectional_nbins), stat=ierr)
+        allocate( nspecies(fanci_nbins), stat=ierr)
         if(ierr/=0) then
             call endrun(subname// ": Error "//int2str(ierr)//" allocating nspecies")
             return
         end if
 
-        allocate( nmasses(oslo_sectional_nbins), stat=ierr)
+        allocate( nmasses(fanci_nbins), stat=ierr)
         if(ierr/=0) then
             call endrun(subname// ": Error "//int2str(ierr)//" allocating nmasses")
             return
         end if
 
-        allocate( bins2ranges(oslo_sectional_nbins), stat=ierr)
+        allocate( bins2ranges(fanci_nbins), stat=ierr)
         if(ierr/=0) then
             call endrun(subname// ": Error "//int2str(ierr)//" allocating bins2ranges'")
             return
         end if
 
-        allocate( bin_centers(oslo_sectional_nbins), stat=ierr)
+        allocate( bin_centers(fanci_nbins), stat=ierr)
         if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating bin_centers'")
            return
         end if
 
-        allocate( bin_bounds(oslo_sectional_nbins, 2), stat=ierr)
+        allocate( bin_bounds(fanci_nbins, 2), stat=ierr)
         if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating bin_bounds'")
            return
         end if
 
-        allocate( range_bounds(oslo_sectional_nranges, 2), stat=ierr)
+        allocate( range_bounds(fanci_nranges, 2), stat=ierr)
         if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating range_bounds'")
            return
         end if
 
 ! TODO: what to do with these, since we are not using them currently?
-        allocate( alogsig(oslo_sectional_nbins), stat=ierr)
+        allocate( alogsig(fanci_nbins), stat=ierr)
         if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating alogsig'")
            return
         end if
 
-        allocate( f1(oslo_sectional_nbins), stat=ierr)
+        allocate( f1(fanci_nbins), stat=ierr)
            if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating f1'")
            return
         end if
 
-        allocate( f2(oslo_sectional_nbins), stat=ierr)
+        allocate( f2(fanci_nbins), stat=ierr)
            if( ierr /= 0 ) then
            call endrun(subname// ": Error "//int2str(ierr)//" allocating f2'")
            return
@@ -430,64 +430,64 @@ contains
         f2 = 1._r8 !nan
 
         ! TODO: check indexer_ var in aerosol_properties mod. same as the indices from chemical pp?
-        do ibin=1,oslo_sectional_nbins
-            read(oslo_sectional_bin_centers(ibin),'(F10.5)') bin_centers(ibin)
-            pos = index(oslo_sectional_bin_bounds(ibin), ':')
-            read(oslo_sectional_bin_bounds(ibin)(1:pos-1), '(F10.5)') bin_bounds(ibin,1)
-            read(oslo_sectional_bin_bounds(ibin)(pos+1:), '(F10.5)') bin_bounds(ibin,2)
+        do ibin=1,fanci_nbins
+            read(fanci_bin_centers(ibin),'(F10.5)') bin_centers(ibin)
+            pos = index(fanci_bin_bounds(ibin), ':')
+            read(fanci_bin_bounds(ibin)(1:pos-1), '(F10.5)') bin_bounds(ibin,1)
+            read(fanci_bin_bounds(ibin)(pos+1:), '(F10.5)') bin_bounds(ibin,2)
         end do
 
         ! parse range bounds
-        do irange=1,oslo_sectional_nranges
-            pos = index(oslo_sectional_range_bounds(irange), ':')
-            read(oslo_sectional_range_bounds(irange)(1:pos-1), '(I3)') range_bounds(irange,1)
-            read(oslo_sectional_range_bounds(irange)(pos+1:), '(I3)') range_bounds(irange,2)
+        do irange=1,fanci_nranges
+            pos = index(fanci_range_bounds(irange), ':')
+            read(fanci_range_bounds(irange)(1:pos-1), '(I3)') range_bounds(irange,1)
+            read(fanci_range_bounds(irange)(pos+1:), '(I3)') range_bounds(irange,2)
         end do
 
-        ncnst_tot = oslo_sectional_nbins + sum(oslo_sectional_nspecies(:oslo_sectional_nranges)) ! nbins + sum(nspecies)
+        ncnst_tot = fanci_nbins + sum(fanci_nspecies(:fanci_nranges)) ! nbins + sum(nspecies)
 
         nmasses = 0
         ! initialize bins2ranges array
-        do irange=1,oslo_sectional_nranges
+        do irange=1,fanci_nranges
             do ibin = range_bounds(irange, 1), range_bounds(irange, 2)
                 bins2ranges(ibin) = irange
-                nspecies(ibin) = oslo_sectional_nspecies(irange)
+                nspecies(ibin) = fanci_nspecies(irange)
             end do
             nmasses(range_bounds(irange,1)) = nspecies(range_bounds(irange, 1))
         end do
 
         ! fill species objects with bin info
-        do ispec = 1, oslo_sectional_nspecies_tot
+        do ispec = 1, fanci_nspecies_tot
             ind = 0
-            oslo_sectional_species_properties(ispec)%nbin = 0
-            do ibin = 1, oslo_sectional_nbins
-                if (bins2ranges(ibin) >= oslo_sectional_species_properties(ispec)%range_ndx(1) .and. &
-                    bins2ranges(ibin) <= maxval(oslo_sectional_species_properties(ispec)%range_ndx)) then
+            fanci_species_properties(ispec)%nbin = 0
+            do ibin = 1, fanci_nbins
+                if (bins2ranges(ibin) >= fanci_species_properties(ispec)%range_ndx(1) .and. &
+                    bins2ranges(ibin) <= maxval(fanci_species_properties(ispec)%range_ndx)) then
                     ! nr of bins containing each species (e.g. dust_nbin in dust_model.F90)
-                    oslo_sectional_species_properties(ispec)%nbin = oslo_sectional_species_properties(ispec)%nbin + 1
+                    fanci_species_properties(ispec)%nbin = fanci_species_properties(ispec)%nbin + 1
                     ind = ind+1
                     ! indices of bins containing each species
                     bin_ndx(ind) = ibin
                 end if
             end do
 ! TODO: I moved the 6 lines below here, after species%nbin is initialized to make the bin_ndx allocatable but feels a bit messy..
-            allocate(oslo_sectional_species_properties(ispec)%bin_ndx(oslo_sectional_species_properties(ispec)%nbin), stat=ierr)
+            allocate(fanci_species_properties(ispec)%bin_ndx(fanci_species_properties(ispec)%nbin), stat=ierr)
             if(ierr/=0) then
-                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating oslo_sectional_species_properties bin_ndx")
+                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating fanci_species_properties bin_ndx")
             end if
-            oslo_sectional_species_properties(ispec)%bin_ndx = bin_ndx(:oslo_sectional_species_properties(ispec)%nbin)
+            fanci_species_properties(ispec)%bin_ndx = bin_ndx(:fanci_species_properties(ispec)%nbin)
 
-            allocate(oslo_sectional_species_properties(ispec)%tracernames(oslo_sectional_species_properties(ispec)%nrange), stat=ierr)
+            allocate(fanci_species_properties(ispec)%tracernames(fanci_species_properties(ispec)%nrange), stat=ierr)
             if(ierr/=0) then
-                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating oslo_sectional_species_properties tracernames")
+                call endrun(subname// ": ERROR "//int2str(ierr)//" allocating fanci_species_properties tracernames")
             end if
-            oslo_sectional_species_properties(ispec)%tracernames = ''
+            fanci_species_properties(ispec)%tracernames = ''
 
-            do irange = 1, oslo_sectional_species_properties(ispec)%nrange
+            do irange = 1, fanci_species_properties(ispec)%nrange
                 ! tracernames for each species - potentially check if consistent with cnst_get_ind?
-                oslo_sectional_species_properties(ispec)%tracernames(irange) = &
-                trim(oslo_sectional_species_properties(ispec)%specname)//'_R'//&
-                trim(int2str(oslo_sectional_species_properties(ispec)%range_ndx(irange)))
+                fanci_species_properties(ispec)%tracernames(irange) = &
+                trim(fanci_species_properties(ispec)%specname)//'_R'//&
+                trim(int2str(fanci_species_properties(ispec)%range_ndx(irange)))
             end do
 
         end do
@@ -501,60 +501,60 @@ contains
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj")
         end if
 
-        allocate(newobj%bins2ranges_(oslo_sectional_nbins), stat=ierr)
+        allocate(newobj%bins2ranges_(fanci_nbins), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%bins2ranges")
         end if
 
-        allocate(newobj%range_nspecies_(oslo_sectional_nranges), stat=ierr)
+        allocate(newobj%range_nspecies_(fanci_nranges), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%range_nspecies")
         end if
 
-        allocate(newobj%bin_centers_(oslo_sectional_nbins), stat=ierr)
+        allocate(newobj%bin_centers_(fanci_nbins), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%bin_centers")
         end if
 
-        allocate(newobj%bin_bounds_(oslo_sectional_nbins, 2), stat=ierr)
+        allocate(newobj%bin_bounds_(fanci_nbins, 2), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%bin_bounds")
         end if
 
-        allocate(newobj%range_bounds_(oslo_sectional_nranges, 2), stat=ierr)
+        allocate(newobj%range_bounds_(fanci_nranges, 2), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%range_bounds")
         end if
 
-        allocate(newobj%aer_spec_prop(oslo_sectional_nspecies_tot), stat=ierr)
+        allocate(newobj%aer_spec_prop(fanci_nspecies_tot), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%aer_spec_prop")
         end if
 
-        allocate(newobj%particle_volume_(oslo_sectional_nbins), stat=ierr)
+        allocate(newobj%particle_volume_(fanci_nbins), stat=ierr)
         if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%particle_volume")
         end if
 
-        do ispec = 1, oslo_sectional_nspecies_tot
-            allocate(newobj%aer_spec_prop(ispec)%bin_ndx(oslo_sectional_species_properties(ispec)%nbin), stat=ierr)
+        do ispec = 1, fanci_nspecies_tot
+            allocate(newobj%aer_spec_prop(ispec)%bin_ndx(fanci_species_properties(ispec)%nbin), stat=ierr)
             if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%aer_spec_prop%bin_ndx")
             end if
-            allocate(newobj%aer_spec_prop(ispec)%range_ndx(oslo_sectional_species_properties(ispec)%nrange), stat=ierr)
+            allocate(newobj%aer_spec_prop(ispec)%range_ndx(fanci_species_properties(ispec)%nrange), stat=ierr)
             if( ierr /=0 ) then
             call endrun(subname// ": ERROR "//int2str(ierr)//" allocating newobj%aer_spec_prop%range_ndx")
             end if
         end do
 
         newobj%bins2ranges_ = bins2ranges
-        newobj%nranges_ = oslo_sectional_nranges
-        newobj%nspecies_tot_ = oslo_sectional_nspecies_tot
-        newobj%range_nspecies_ = oslo_sectional_nspecies(:oslo_sectional_nranges)
-        newobj%bin_centers_ = bin_centers(:oslo_sectional_nbins) * 1.e-9_r8             ! nm to m
-        newobj%bin_bounds_ = bin_bounds(:oslo_sectional_nbins, :) * 1.e-9_r8            ! nm to m
-        newobj%range_bounds_ = range_bounds(:oslo_sectional_nranges, :)
-        newobj%aer_spec_prop = oslo_sectional_species_properties(:oslo_sectional_nspecies_tot)
+        newobj%nranges_ = fanci_nranges
+        newobj%nspecies_tot_ = fanci_nspecies_tot
+        newobj%range_nspecies_ = fanci_nspecies(:fanci_nranges)
+        newobj%bin_centers_ = bin_centers(:fanci_nbins) * 1.e-9_r8             ! nm to m
+        newobj%bin_bounds_ = bin_bounds(:fanci_nbins, :) * 1.e-9_r8            ! nm to m
+        newobj%range_bounds_ = range_bounds(:fanci_nranges, :)
+        newobj%aer_spec_prop = fanci_species_properties(:fanci_nspecies_tot)
         newobj%particle_volume_ = 4._r8/3._r8*pi*(newobj%bin_centers_**3)
 
         ! deallocate local variables
@@ -562,54 +562,54 @@ contains
         if (allocated(bin_bounds)) deallocate(bin_bounds)
         if (allocated(range_bounds)) deallocate(range_bounds)
         if (allocated(bins2ranges)) deallocate(bins2ranges)
-        if (allocated(oslo_sectional_species_properties)) deallocate(oslo_sectional_species_properties)
+        if (allocated(fanci_species_properties)) deallocate(fanci_species_properties)
 
-        call newobj%initialize(oslo_sectional_nbins, ncnst_tot, nspecies, nmasses, alogsig, f1, f2, ierr)
+        call newobj%initialize(fanci_nbins, ncnst_tot, nspecies, nmasses, alogsig, f1, f2, ierr)
 !==================================================================================================
 ! Report
 !==================================================================================================
 !    call MPI_Barrier(mpicom, ierr)
         if (masterproc) then
-            write(iulog,*) 'sectional aerosol properties: '
+            write(iulog,*) 'fanci aerosol properties: '
             write(iulog,*) 'nbins = ', newobj%nbins()
             write(iulog,*) 'nranges = ', newobj%nranges_
             write(iulog,*) 'ncnst_tot = ', newobj%ncnst_tot()
             write(iulog,*) 'nspecies_tot = ', newobj%nspecies_tot_
             write(iulog,*) 'nspecies = ', newobj%nspecies()
 
-            do irange=1,oslo_sectional_nranges,5
-                write(iulog,*) 'range_nspecies = ', newobj%range_nspecies_(irange:min(irange+4, oslo_sectional_nranges))
+            do irange=1,fanci_nranges,5
+                write(iulog,*) 'range_nspecies = ', newobj%range_nspecies_(irange:min(irange+4, fanci_nranges))
             end do
 
-            do ibin=1,oslo_sectional_nbins,5
-                write(iulog,*) 'bin_centers in nm = ', newobj%bin_centers_(ibin:min(ibin+4, oslo_sectional_nbins))*1e9
+            do ibin=1,fanci_nbins,5
+                write(iulog,*) 'bin_centers in nm = ', newobj%bin_centers_(ibin:min(ibin+4, fanci_nbins))*1e9
             end do
 
-            do ibin=1,oslo_sectional_nbins,5
-                write(iulog,*) 'bins2ranges = ',newobj%bins2ranges_(ibin:min(ibin+4, oslo_sectional_nbins))
+            do ibin=1,fanci_nbins,5
+                write(iulog,*) 'bins2ranges = ',newobj%bins2ranges_(ibin:min(ibin+4, fanci_nbins))
             end do
 
-            do ibin=1,oslo_sectional_nbins,5
-                write(iulog,*) 'particle_volume in m3 = ',newobj%particle_volume_(ibin:min(ibin+4, oslo_sectional_nbins))
+            do ibin=1,fanci_nbins,5
+                write(iulog,*) 'particle_volume in m3 = ',newobj%particle_volume_(ibin:min(ibin+4, fanci_nbins))
             end do
 
-            write(iulog,*) 'Parameters for activation calculation are uniform across all bins for the sectional model: '
-            write(iulog,*) 'f1 for abdul-razzak & gahn = ', f1(1) ! they are the same everywhere for sectional model
+            write(iulog,*) 'Parameters for activation calculation are uniform across all bins for the fanci model: '
+            write(iulog,*) 'f1 for abdul-razzak & gahn = ', f1(1) ! they are the same everywhere for fanci model
             write(iulog,*) 'f2 for abdul-razzak & gahn = ', f2(1)
             write(iulog,*) 'alogsig is = ', alogsig(1)
 
-            do ibin=1,oslo_sectional_nbins
+            do ibin=1,fanci_nbins
                 write(iulog,*) 'bin_bounds in nm = ', newobj%bin_bounds_(ibin,1)*1e9, &
                                         ' : ', newobj%bin_bounds_(ibin,2)*1e9
             end do
-            do irange=1,oslo_sectional_nranges !TODO FIX format
+            do irange=1,fanci_nranges !TODO FIX format
                 write(iulog,*) 'range_bounds = ', newobj%range_bounds_(irange,1), &
                                         ' : ', newobj%range_bounds_(irange,2)
             end do
 
-            do ind = 1,oslo_sectional_nspecies_tot
+            do ind = 1,fanci_nspecies_tot
                 ! TODO (low priority): fix the format :D
-                write(iulog ,*) 'sectional aerosol species properties: '
+                write(iulog ,*) 'fanci aerosol species properties: '
                 write(iulog ,*) 'species name = ', newobj%aer_spec_prop(ind)%specname
                 write(iulog ,*) 'species type = ', newobj%aer_spec_prop(ind)%spectype
                 write(iulog ,*) 'range indices = ', newobj%aer_spec_prop(ind)%range_ndx(1), ' : ', newobj%aer_spec_prop(ind)%range_ndx(newobj%aer_spec_prop(ind)%nrange)
@@ -626,7 +626,7 @@ contains
         prop_obj => newobj
     else
         if ( .not. associated(prop_obj) ) then
-            call endrun("Internal Error: sectional_aerosol_properties has not been initialized")
+            call endrun("Internal Error: fanci_aerosol_properties has not been initialized")
         end if
         newobj => prop_obj
 
@@ -643,7 +643,7 @@ contains
   !------------------------------------------------------------------------------
   !------------------------------------------------------------------------------
   subroutine destructor(self)
-    type(sectional_aerosol_properties), intent(inout) :: self
+    type(fanci_aerosol_properties), intent(inout) :: self
 
     character(len=*), parameter :: subname = 'destructor'
 
@@ -679,7 +679,7 @@ contains
   ! returns number of transported aerosol constituents
   !------------------------------------------------------------------------------
   integer function number_transported(self)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     character(len=*), parameter :: subname = 'number_transported'
 
     number_transported = self%nbins() + sum(self%range_nspecies_)
@@ -699,7 +699,7 @@ contains
   subroutine get(self, bin_ndx, species_ndx, list_ndx, density, hygro, &
                  spectype, specname, specmorph, refindex_sw, refindex_lw)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx             ! bin index
     integer, intent(in) :: species_ndx         ! species index
     integer, optional, intent(in) :: list_ndx  ! climate or a diagnostic list number
@@ -737,7 +737,7 @@ contains
     end do
 
     if (present(list_ndx)) then
-        call endrun(subname//' list_ndx in sectional_aerosol_properties is not yet implemented')
+        call endrun(subname//' list_ndx in fanci_aerosol_properties is not yet implemented')
     end if
 
     if (present(density)) then
@@ -749,7 +749,7 @@ contains
     end if
 
     if (present(hygro)) then
-!        call endrun(subname//' hygro in sectional_aerosol_properties is not yet implemented')
+!        call endrun(subname//' hygro in fanci_aerosol_properties is not yet implemented')
 ! TODO: this is the hygroscopicity for each species.. should be mixed?
         if (specprop_ndx /= 0) then
             hygro = self%aer_spec_prop(specprop_ndx)%kappa
@@ -776,15 +776,15 @@ contains
     end if
 
     if (present(specmorph)) then
-        call endrun(subname//' specmorph in sectional_aerosol_properties is not yet implemented')
+        call endrun(subname//' specmorph in fanci_aerosol_properties is not yet implemented')
     end if
 
     if (present(refindex_sw)) then
-        call endrun(subname//' refindex_sw in sectional_aerosol_properties is not yet implemented')
+        call endrun(subname//' refindex_sw in fanci_aerosol_properties is not yet implemented')
     end if
 
     if (present(refindex_lw)) then
-        call endrun(subname//' refindex_lw in sectional_aerosol_properties is not yet implemented')
+        call endrun(subname//' refindex_lw in fanci_aerosol_properties is not yet implemented')
     end if
 
   end subroutine get
@@ -798,7 +798,7 @@ contains
        sw_hygro_coreshell_ext, sw_hygro_coreshell_ssa, sw_hygro_coreshell_asm, lw_hygro_coreshell_ext, &
        corefrac, bcdust, kap, relh, nfrac, nbcdust, nkap, nrelh )
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx             ! bin index
     integer, intent(in) :: list_ndx            ! rad climate/diags list
 
@@ -850,7 +850,7 @@ contains
   !------------------------------------------------------------------------------
   pure elemental real(r8) function amcube(self, bin_ndx, volconc, numconc)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx  ! bin number
     real(r8), intent(in) :: volconc ! volume conc (m3/m3)
     real(r8), intent(in) :: numconc ! number conc (1/m3)
@@ -866,7 +866,7 @@ contains
   !------------------------------------------------------------------------------
   real(r8) function density(self, species_ndx)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: species_ndx                          ! element in the sec_aero_props array
 
     if (species_ndx > 0) then
@@ -881,7 +881,7 @@ contains
   !------------------------------------------------------------------------------
   real(r8) function kappa(self, species_ndx)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: species_ndx
 
     if (species_ndx > 0) then
@@ -897,7 +897,7 @@ contains
   !------------------------------------------------------------------------------
   real(r8) function molecular_weight(self, species_ndx)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: species_ndx
 
     molecular_weight = self%aer_spec_prop(species_ndx)%molecular_weight
@@ -909,7 +909,7 @@ contains
   !------------------------------------------------------------------------------
   subroutine actfracs(self, bin_ndx, smc, smax, fn, fm )
     use shr_spfn_mod, only: erf => shr_spfn_erf
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx   ! bin index
     real(r8),intent(in) :: smc       ! critical supersaturation for particles of bin radius
     real(r8),intent(in) :: smax      ! maximum supersaturation for multiple competing aerosols
@@ -934,7 +934,7 @@ contains
   ! returns constituents names of aerosol number mixing ratios
   !------------------------------------------------------------------------
   subroutine num_names(self, bin_ndx, name_a, name_c)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     character(len=*), intent(out) :: name_a ! constituent name of ambient aerosol number dens
     character(len=*), intent(out) :: name_c ! constituent name of cloud-borne aerosol number dens
@@ -950,7 +950,7 @@ contains
   ! returns constituents names of aerosol mass mixing ratios
   !------------------------------------------------------------------------
   subroutine mmr_names(self, bin_ndx, species_ndx, name_a, name_c)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
     character(len=*), intent(out) :: name_a ! constituent name of ambient aerosol MMR
@@ -990,7 +990,7 @@ end if
   ! returns constituent name of ambient aerosol number mixing ratios
   !------------------------------------------------------------------------
   subroutine amb_num_name(self, bin_ndx, name)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     character(len=*), intent(out) :: name   ! constituent name of ambient aerosol number dens
     character(len=*), parameter :: subname = 'amb_num_name'
@@ -1003,7 +1003,7 @@ end if
   ! returns constituent name of ambient aerosol mass mixing ratios
   !------------------------------------------------------------------------
   subroutine amb_mmr_name(self, bin_ndx, species_ndx, name)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
     character(len=*), intent(out) :: name   ! constituent name of ambient aerosol MMR
@@ -1017,7 +1017,7 @@ end if
   ! returns species type
   !------------------------------------------------------------------------
   subroutine species_type(self, bin_ndx, species_ndx, spectype)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
     character(len=*), intent(out) :: spectype ! species type
@@ -1031,7 +1031,7 @@ end if
   ! returns TRUE if Ice Nucleation tendencies are applied to given aerosol bin number
   !------------------------------------------------------------------------------
   function icenuc_updates_num(self, bin_ndx) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
 
     logical :: res
@@ -1051,7 +1051,7 @@ end if
   ! returns TRUE if Ice Nucleation tendencies are applied to a given species within a bin
   !------------------------------------------------------------------------------
   function icenuc_updates_mmr(self, bin_ndx, species_ndx) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
 
@@ -1071,7 +1071,7 @@ end if
   ! apply max / min to number concentration
   !------------------------------------------------------------------------------
   subroutine apply_number_limits( self, naerosol, vaerosol, istart, istop, m )
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     real(r8), intent(inout) :: naerosol(:)  ! number conc (1/m3)
     real(r8), intent(in)    :: vaerosol(:)  ! volume conc (m3/m3)
     integer,  intent(in) :: istart          ! start column index (1 <= istart <= istop <= pcols)
@@ -1091,7 +1091,7 @@ end if
   ! the particles' ability to act as heterogeneous freezing nuclei
   !------------------------------------------------------------------------------
   function hetfrz_species(self, bin_ndx, spc_ndx) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx  ! bin number
     integer, intent(in) :: spc_ndx  ! species number
 
@@ -1106,7 +1106,7 @@ end if
   ! returns TRUE if soluble
   !------------------------------------------------------------------------------
   logical function soluble(self,bin_ndx)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     character(len=*), parameter :: subname = 'soluble'
 
@@ -1118,7 +1118,7 @@ end if
   ! returns minimum mass mean radius (meters)
   !------------------------------------------------------------------------------
   function min_mass_mean_rad(self,bin_ndx,species_ndx) result(minrad)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
 
@@ -1135,7 +1135,7 @@ end if
   ! returns the total number of bins for a given radiation list index
   !------------------------------------------------------------------------------
   function nbins_rlist(self, list_ndx)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: list_ndx  ! radiation list number
 
     integer :: res
@@ -1149,7 +1149,7 @@ end if
   ! returns the total number of species objects
   !------------------------------------------------------------------------------
   function nspecies_tot(self)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer :: res
     character(len=*), parameter :: subname = 'nspecies_tot'
 
@@ -1161,7 +1161,7 @@ end if
   ! returns the total number of species in each range
   !------------------------------------------------------------------------------
   function range_nspecies(self, irange)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: irange
     integer :: res
     character(len=*), parameter :: subname = 'range_nspecies'
@@ -1174,7 +1174,7 @@ end if
   ! returns the total number of ranges
   !------------------------------------------------------------------------------
   function nranges(self)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer :: res
     character(len=*), parameter :: subname = 'nranges'
 
@@ -1186,7 +1186,7 @@ end if
   ! returns bin centers
   !------------------------------------------------------------------------------
   function bin_centers(self, nbins) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: nbins
     real(r8) :: res(nbins)
     character(len=*), parameter :: subname = 'bin_centers'
@@ -1199,7 +1199,7 @@ end if
   ! returns bin bounds
   !------------------------------------------------------------------------------
   function bin_bounds(self, bin_ndx, bound) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx
     integer, intent(in) :: bound     ! 1 for lower, 2 for upper
     real(r8) :: res
@@ -1213,7 +1213,7 @@ end if
   ! returns range bounds
   !------------------------------------------------------------------------------
   integer function range_bounds(self, irange, bound) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: irange
     integer, intent(in) :: bound ! 1 for lower bound, 2 for upper bound
     character(len=*), parameter :: subname = 'range_bounds'
@@ -1226,7 +1226,7 @@ end if
   ! returns volume of a particle in a bin
   !------------------------------------------------------------------------------
   function particle_volume(self, ibin) result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: ibin
     real(r8) :: res
     character(len=*), parameter :: subname = 'particle_volume'
@@ -1238,7 +1238,7 @@ end if
   ! returns the index of a range
   !------------------------------------------------------------------------------
   function spec_range_ndx(self, specprop_ndx, ind)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: specprop_ndx ! location in the aer_spec_props object
     integer, intent(in) :: ind          ! location in the aer_spec_props(species)%range_ndx array
     integer :: res
@@ -1253,7 +1253,7 @@ end if
   !------------------------------------------------------------------------------
   function spec_bin_ndx(self, specprop_ndx, ind)  result(res)
     ! TODO: needed?
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: ind, specprop_ndx
     integer :: ibin
     integer :: res
@@ -1268,7 +1268,7 @@ end if
   !------------------------------------------------------------------------------
   function spec_nrange(self, species_ndx)  result(res)
     ! TODO: needed?
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: species_ndx
     integer :: res
     character(len=*), parameter :: subname = 'spec_nrange'
@@ -1282,7 +1282,7 @@ end if
   !------------------------------------------------------------------------------
   function spec_nbin(self, specprop_ndx, spectype)  result(res)
     ! TODO: needed?
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, optional, intent(in)   :: specprop_ndx
     character(len=*), optional, intent(in) :: spectype
     integer :: ispecprop
@@ -1309,7 +1309,7 @@ end if
   !------------------------------------------------------------------------------
   function spec_tracernames(self, species_ndx, spec_range_ndx)  result(res)
     ! TODO: needed?
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: species_ndx, spec_range_ndx
     character(len=10) :: res
     character(len=*), parameter :: subname = 'spec_tracernames'
@@ -1323,7 +1323,7 @@ end if
   !------------------------------------------------------------------------------
 
   integer function bins2ranges(self, ibin)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in)         :: ibin
     character(len=*), parameter :: subname = 'bins2ranges'
 
@@ -1334,7 +1334,7 @@ end if
   ! returns number of species in a bin for a given radiation list index
   !------------------------------------------------------------------------------
   function nspecies_per_bin_rlist(self, list_ndx,  bin_ndx)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: list_ndx ! radiation list number
     integer, intent(in) :: bin_ndx  ! bin number
 
@@ -1350,7 +1350,7 @@ end if
   ! distribution for radiation list number and aerosol bin
   !------------------------------------------------------------------------------
   function alogsig_rlist(self, list_ndx,  bin_ndx)  result(res)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: list_ndx ! radiation list number
     integer, intent(in) :: bin_ndx  ! bin number
 
@@ -1366,7 +1366,7 @@ end if
   ! returns name for a given radiation list number and aerosol bin
   !------------------------------------------------------------------------------
   function bin_name(self, list_ndx,  bin_ndx) result(name)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: list_ndx ! radiation list number
     integer, intent(in) :: bin_ndx  ! bin number
 
@@ -1383,7 +1383,7 @@ end if
   function scav_diam(self, bin_ndx) result(diam)
     use modal_aero_data, only: dgnum_amode
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx  ! bin number
 
     real(r8) :: diam
@@ -1402,7 +1402,7 @@ end if
 
     use modal_aero_data, only:  mode_size_order
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     real(r8), intent(inout) :: dcondt(:)
     character(len=*), parameter :: subname = 'resuspension_resize'
 
@@ -1418,7 +1418,7 @@ end if
                                error_code, error_string)
     use infnan, only: nan, assignment(=)
 
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     character(len=*),intent(in) :: bulk_type       ! aerosol type to rebin
     real(r8), intent(in) :: dep_fluxes(:)          ! kg/m2 -> for each bin!
     real(r8), intent(in) :: diam_edges(:)          ! meters
@@ -1524,7 +1524,7 @@ end if
   ! Returns TRUE if bin is hydrophilic, otherwise FALSE
   !------------------------------------------------------------------------------
   logical function hydrophilic(self, bin_ndx)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx ! bin number
 
     character(len=aero_name_len) :: modetype
@@ -1537,15 +1537,13 @@ end if
   end function hydrophilic
 
   !------------------------------------------------------------------------------
-  ! returns TRUE if sectional aerosol representation
+  ! returns TRUE if fanci aerosol representation
   !------------------------------------------------------------------------------
   pure logical function model_is(self, query)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     character(len=*),               intent(in) :: query
 
-    if (trim(query) == 'oslo_sectional') then
-       model_is = .true.
-    else if (trim(query) == 'sectional') then
+    if (trim(query) == 'fanci') then
        model_is = .true.
     else
        model_is = .false.
@@ -1556,7 +1554,7 @@ end if
   ! returns TRUE if given species is active
   !------------------------------------------------------------------------------
   pure logical function is_active(self, spectype)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     character(len=*),                    intent(in) :: spectype
     integer :: ispec
 
@@ -1574,7 +1572,7 @@ end if
   ! Returns specname with aer_spec_props index
   !------------------------------------------------------------------------------
   function specname(self, specprop_ndx) result(species_name)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in)           :: specprop_ndx
     character(len=:), allocatable :: species_name
 
@@ -1585,7 +1583,7 @@ end if
   ! Returns spectype with aer_spec_props index
   !------------------------------------------------------------------------------
   function spectype(self, specprop_ndx) result(species_type)
-    class(sectional_aerosol_properties), intent(in) :: self
+    class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in)           :: specprop_ndx
     character(len=:), allocatable :: species_type
 
@@ -1600,7 +1598,7 @@ end if
      use cam_history, only: fieldname_len
      use constituents, only: cnst_get_ind
 
-     class(sectional_aerosol_properties), intent(in) :: self
+     class(fanci_aerosol_properties), intent(in) :: self
      integer, intent(in) :: specprop_ndx, spec_bin_ndx
      character(len=fieldname_len) :: dummy
      integer             :: bin_q_ndx
@@ -1617,7 +1615,7 @@ end if
      use cam_history, only: fieldname_len
      use constituents, only: cnst_get_ind
 
-     class(sectional_aerosol_properties), intent(in) :: self
+     class(fanci_aerosol_properties), intent(in) :: self
      integer, intent(in) :: specprop_ndx, spec_range_ndx
      character(len=fieldname_len) :: dummy
      integer             :: mmr_q_ndx
@@ -1630,4 +1628,4 @@ end if
   end function spec_mmr_q_ndx
 
 
-end module sectional_aerosol_properties_mod
+end module fanci_aerosol_properties_mod

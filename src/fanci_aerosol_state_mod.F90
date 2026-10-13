@@ -1,11 +1,11 @@
-module sectional_aerosol_state_mod
+module fanci_aerosol_state_mod
 ! TODO: make cloud borne tracers
   use shr_kind_mod, only: r8 => shr_kind_r8
   use shr_spfn_mod, only: erf => shr_spfn_erf
   use aerosol_state_mod, only: aerosol_state, ptr2d_t
   use physics_types, only: physics_state
   use aerosol_properties_mod, only: aerosol_properties, aero_name_len
-  use sectional_aerosol_properties_mod, only: sectional_aerosol_properties
+  use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
   use physconst,  only: rhoh2o, mwh2o
 
   use spmd_utils,     only: masterproc
@@ -21,7 +21,7 @@ module sectional_aerosol_state_mod
 
   private
 
-  public :: sectional_aerosol_state
+  public :: fanci_aerosol_state
   public :: aero_state_ptr
 
 
@@ -29,7 +29,7 @@ module sectional_aerosol_state_mod
   real(r8), parameter   :: dryvol_min = 1e-26_r8   ! m3_aer/kg_air; range_dry_volume at/below this => no aerosol
 
   type aero_state_ptr
-    type(sectional_aerosol_state), pointer :: ptr => null()
+    type(fanci_aerosol_state), pointer :: ptr => null()
   end type aero_state_ptr
 
   type aerosol_range_state ! one instance per range
@@ -44,12 +44,12 @@ module sectional_aerosol_state_mod
 
   end type aerosol_range_state
 
-  type, extends(aerosol_state) :: sectional_aerosol_state
+  type, extends(aerosol_state) :: fanci_aerosol_state
      !private
 
      type(physics_state), pointer :: state => null()
      type(physics_buffer_desc), pointer :: pbuf(:) => null()
-     type(sectional_aerosol_properties), pointer :: sec_aero_props => null()
+     type(fanci_aerosol_properties), pointer :: sec_aero_props => null()
      real(r8), pointer :: bin_numconc_cw(:,:,:) => null()
      real(r8), pointer :: wet_radius(:,:,:) => null()           ! wet radius at bin center -> wet_radius*2 = dgnumwet
      real(r8), pointer :: qaerwat(:,:,:) => null()              ! aerosol water concentration (g/g)
@@ -87,11 +87,11 @@ module sectional_aerosol_state_mod
      procedure :: bin_species_mmr               !done, duplicate of get_ambient_mmr?
      final :: destructor
 
-  end type sectional_aerosol_state
+  end type fanci_aerosol_state
 
-  interface sectional_aerosol_state
+  interface fanci_aerosol_state
      procedure :: constructor
-  end interface sectional_aerosol_state
+  end interface fanci_aerosol_state
 
   real(r8), parameter :: rho_aer_fallback = 1000._r8   ! kg/m3; only used where a range holds no aerosol
   real(r8), parameter :: rh2odens = 1._r8/rhoh2o
@@ -109,8 +109,8 @@ contains
     type(physics_state), target :: state
     type(physics_buffer_desc), pointer :: pbuf(:)
 
-    type(sectional_aerosol_state), pointer :: newobj
-    type(sectional_aerosol_properties), target :: aero_props
+    type(fanci_aerosol_state), pointer :: newobj
+    type(fanci_aerosol_properties), target :: aero_props
     logical, intent(in), optional :: copy
     logical :: make_copy
     integer :: ierr, irange, solsym_ndx, ispec, ubar_ndx, ibin, ispecprops, lchnk
@@ -148,7 +148,7 @@ contains
 
         newobj%state => state
         newobj%pbuf => pbuf
-        newobj%sec_aero_props => sectional_aerosol_properties()
+        newobj%sec_aero_props => fanci_aerosol_properties()
 
         newobj%ncol = state%ncol
         newobj%lchnk = state%lchnk
@@ -297,7 +297,7 @@ contains
         if (.not. associated(master_aero_state(lchnk)%ptr)) then
             master_aero_state(lchnk)%ptr => newobj
             if (nr_copies(lchnk) > 2) then
- !               write(iulog,*) 'constructor: oslo_sectional_aerosol_state_mod: number of copies = ', nr_copies(lchnk)
+ !               write(iulog,*) 'constructor: fanci_aerosol_state_mod: number of copies = ', nr_copies(lchnk)
                 call endrun(subname//':: ERROR: master_aero_state already nr_copies > 2')
             end if
         end if
@@ -312,7 +312,7 @@ contains
   !------------------------------------------------------------------------------
   !------------------------------------------------------------------------------
   subroutine destructor(self)
-    type(sectional_aerosol_state), intent(inout) :: self
+    type(fanci_aerosol_state), intent(inout) :: self
 
     character(len=*), parameter :: subname = 'destructor'
 
@@ -335,7 +335,7 @@ contains
     end if
 
     if (masterproc) then
-        write(iulog,*) 'destructor: oslo_sectional_aerosol_state_mod: number of copies = ', nr_copies(self%lchnk)
+        write(iulog,*) 'destructor: fanci_aerosol_state_mod: number of copies = ', nr_copies(self%lchnk)
     end if
 
     nr_copies(self%lchnk) = nr_copies(self%lchnk) - 1
@@ -350,7 +350,7 @@ contains
   ! (mass mixing ratios or number mixing ratios)
   !------------------------------------------------------------------------------
   subroutine set_transported( self, transported_array )
-    class(sectional_aerosol_state), intent(inout) :: self
+    class(fanci_aerosol_state), intent(inout) :: self
     real(r8), intent(in) :: transported_array(:,:,:)
     integer              :: irange, ispec, ibin
 
@@ -374,7 +374,7 @@ contains
   ! (mass mixing ratios or number mixing ratios)
   !------------------------------------------------------------------------------
   subroutine get_transported( self, transported_array )
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     real(r8), intent(out) :: transported_array(:,:,:)
     integer               :: irange, ispec, ibin
 
@@ -388,7 +388,7 @@ contains
   ! Total aerosol mass mixing ratio for a bin in a given grid box location (column and layer)
   !------------------------------------------------------------------------
   function ambient_total_bin_mmr(self, aero_props, bin_ndx, col_ndx, lyr_ndx) result(mmr_tot)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
     integer, intent(in) :: bin_ndx      ! bin index
     integer, intent(in) :: col_ndx      ! column index
@@ -414,7 +414,7 @@ contains
   ! returns ambient aerosol mass mixing ratio for a given species index and bin index
   !------------------------------------------------------------------------------
   subroutine get_ambient_mmr_0list(self, species_ndx, bin_ndx, mmr)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: species_ndx  ! species index
     integer, intent(in) :: bin_ndx      ! bin index
     real(r8), pointer   :: mmr(:,:)     ! mass mixing ratios (ncol,nlev)
@@ -432,7 +432,7 @@ contains
   ! list index, species index and bin index
   !------------------------------------------------------------------------------
   subroutine get_ambient_mmr_rlist(self, list_ndx, species_ndx, bin_ndx, mmr)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: list_ndx     ! rad climate list index
     integer, intent(in) :: species_ndx  ! species index
     integer, intent(in) :: bin_ndx      ! bin index
@@ -448,7 +448,7 @@ contains
   ! returns cloud-borne aerosol number mixing ratio for a given species index and bin index
   !------------------------------------------------------------------------------
   subroutine get_cldbrne_mmr(self, species_ndx, bin_ndx, mmr)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: species_ndx  ! species index
     integer, intent(in) :: bin_ndx      ! bin index
     real(r8), pointer   :: mmr(:,:)       ! mass mixing ratios (ncol,nlev)
@@ -465,7 +465,7 @@ contains
   ! returns ambient aerosol number mixing ratio for a given species index and bin index
   !------------------------------------------------------------------------------
   subroutine get_ambient_num(self, bin_ndx, num)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx     ! bin index
     real(r8), pointer   :: num(:,:)    ! number densities
 
@@ -479,7 +479,7 @@ contains
   ! returns cloud-borne aerosol number mixing ratio for a given species index and bin index
   !------------------------------------------------------------------------------
   subroutine get_cldbrne_num(self, bin_ndx, num)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx             ! bin index
     real(r8), pointer :: num(:,:)
 
@@ -493,7 +493,7 @@ contains
   ! returns interstitial and cloud-borne aerosol states
   !------------------------------------------------------------------------------
   subroutine get_states( self, aero_props, raer, qqcw )
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
     type(ptr2d_t), intent(out) :: raer(:)
     type(ptr2d_t), intent(out) :: qqcw(:)
@@ -522,7 +522,7 @@ contains
   ! return aerosol bin size weights for a given bin
   !------------------------------------------------------------------------------
   subroutine icenuc_size_wght_arr(self, bin_ndx, ncol, nlev, species_type, use_preexisting_ice, wght)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx                ! bin number
     integer, intent(in) :: ncol                ! number of columns
     integer, intent(in) :: nlev                ! number of vertical levels
@@ -540,7 +540,7 @@ contains
   ! return aerosol bin size weights for a given bin, column and vertical layer
   !------------------------------------------------------------------------------
   subroutine icenuc_size_wght_val(self, bin_ndx, col_ndx, lyr_ndx, species_type, use_preexisting_ice, wght)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx                ! bin number
     integer, intent(in) :: col_ndx                ! column index
     integer, intent(in) :: lyr_ndx                ! vertical layer index
@@ -561,7 +561,7 @@ contains
 
     use aerosol_properties_mod, only: aerosol_properties
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx                ! bin number
     integer, intent(in) :: ncol                   ! number of columns
     integer, intent(in) :: nlev                   ! number of vertical levels
@@ -581,7 +581,7 @@ contains
   !------------------------------------------------------------------------------
   !------------------------------------------------------------------------------
   subroutine update_bin( self, bin_ndx, col_ndx, lyr_ndx, delmmr_sum, delnum_sum, tnd_ndx, dtime, tend )
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx                ! bin number
     integer, intent(in) :: col_ndx                ! column index
     integer, intent(in) :: lyr_ndx                ! vertical layer index
@@ -603,7 +603,7 @@ contains
   ! as heterogeneous freezing nuclei
   !------------------------------------------------------------------------------
   function hetfrz_size_wght(self, bin_ndx, ncol, nlev) result(wght)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx             ! bin number
     integer, intent(in) :: ncol                ! number of columns
     integer, intent(in) :: nlev                ! number of vertical levels
@@ -621,7 +621,7 @@ contains
   ! bin number
   !------------------------------------------------------------------------------
   subroutine hygroscopicity(self, list_ndx, bin_ndx, kappa)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
 ! TODO: what is list_ndx?
     integer, intent(in) :: list_ndx        ! rad climate list number
     integer, intent(in) :: bin_ndx         ! bin number
@@ -641,7 +641,7 @@ contains
   !------------------------------------------------------------------------------
   subroutine water_uptake(self, aero_props, list_ndx, bin_ndx, ncol, nlev, dgnumwet, qaerwat)
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
     integer, intent(in) :: list_ndx             ! rad climate/diags list number
     integer, intent(in) :: bin_ndx              ! bin number
@@ -661,7 +661,7 @@ contains
   !------------------------------------------------------------------------------
   function dry_volume(self, aero_props, list_ndx, bin_ndx, ncol, nlev) result(vol)
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
 
     integer, intent(in) :: list_ndx  ! rad climate/diags list number
@@ -683,7 +683,7 @@ contains
   !------------------------------------------------------------------------------
   function wet_volume(self, aero_props, list_ndx, bin_ndx, ncol, nlev) result(vol)
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
 
     integer, intent(in) :: list_ndx  ! rad climate/diags list number
@@ -710,7 +710,7 @@ contains
   !------------------------------------------------------------------------------
   function water_volume(self, aero_props, list_ndx, bin_ndx, ncol, nlev) result(vol)
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     class(aerosol_properties), intent(in) :: aero_props
 
     integer, intent(in) :: list_ndx  ! rad climate/diags list number
@@ -738,7 +738,7 @@ contains
   ! aerosol wet diameter
   !------------------------------------------------------------------------------
   function wet_diameter(self, bin_ndx, ncol, nlev) result(diam)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx   ! bin number
     integer, intent(in) :: ncol      ! number of columns
     integer, intent(in) :: nlev      ! number of levels
@@ -755,7 +755,7 @@ contains
   !------------------------------------------------------------------------------
   function convcld_actfrac(self, ibin, ispc, ncol, nlev) result(frac)
 
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: ibin   ! bin index
     integer, intent(in) :: ispc   ! species index
     integer, intent(in) :: ncol   ! number of columns
@@ -777,7 +777,7 @@ contains
   ! aerosol weight precent of H2SO4/H2O solution
   !------------------------------------------------------------------------------
   function wgtpct(self, ncol, nlev) result(wtp)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) ::  ncol, nlev
     real(r8) :: wtp(ncol,nlev)  ! weight precent of H2SO4/H2O solution for given icol, ilev
     character(len=*), parameter :: subname = 'wgtpct'
@@ -787,7 +787,7 @@ contains
   end function wgtpct
 
   function bin_dry_density(self, bin_ndx, ncol) result(ddens)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in)   :: bin_ndx
     integer, intent(in)   :: ncol                 ! number of columns
     integer               :: irange
@@ -801,7 +801,7 @@ contains
   end function bin_dry_density
 
   subroutine update_range(self, irange, ncol, mmr_tend)
-    class(sectional_aerosol_state), intent(inout) :: self
+    class(fanci_aerosol_state), intent(inout) :: self
     real(r8), optional, intent(in) :: mmr_tend(:,:,:) ! shape aero_props%range_nspecies (ncol, pver, range_nspecies) -> one array for one range
     integer, intent(in)  :: irange
     integer, intent(in)  :: ncol                 ! number of columns
@@ -861,7 +861,7 @@ contains
   end subroutine update_range
 
   function bin_species_mmr(self, bin_ndx, species_ndx, col_ndx, lyr_ndx) result(spec_mmr_in_bin)
-    class(sectional_aerosol_state), intent(in) :: self
+    class(fanci_aerosol_state), intent(in) :: self
     integer, intent(in) :: bin_ndx
     integer, intent(in) :: species_ndx
     integer, intent(in) :: col_ndx, lyr_ndx
@@ -874,4 +874,4 @@ contains
 
   end function bin_species_mmr
 
-end module sectional_aerosol_state_mod
+end module fanci_aerosol_state_mod

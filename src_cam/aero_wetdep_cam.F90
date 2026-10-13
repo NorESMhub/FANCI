@@ -22,12 +22,12 @@ module aero_wetdep_cam
   use aerosol_properties_mod, only: aerosol_properties
   use modal_aerosol_properties_mod, only: modal_aerosol_properties
   use carma_aerosol_properties_mod, only: carma_aerosol_properties
-  use sectional_aerosol_properties_mod, only: sectional_aerosol_properties
+  use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
 
   use aerosol_state_mod, only: aerosol_state, ptr2d_t
   use modal_aerosol_state_mod, only: modal_aerosol_state
   use carma_aerosol_state_mod, only: carma_aerosol_state
-  use sectional_aerosol_state_mod, only: sectional_aerosol_state
+  use fanci_aerosol_state_mod, only: fanci_aerosol_state
 
   use aero_convproc, only: aero_convproc_readnl, aero_convproc_init, aero_convproc_intr
   use aero_convproc, only: convproc_do_evaprain_atonce
@@ -46,7 +46,7 @@ module aero_wetdep_cam
   public :: aero_wetdep_tend
 
 ! TODO: if we use this from aero_model.F90, then we have a circular dependency.. use model_is function?
-  character(len=*), parameter :: aero_modelname= 'oslo_sectional'
+  character(len=*), parameter :: aero_modelname= 'fanci'
 
   real(r8), parameter :: NOTSET = -huge(1._r8)
   real(r8) :: sol_facti_cloud_borne   = NOTSET
@@ -195,16 +195,16 @@ contains
           call endrun(subrname//' : construction of aero_props carma_aerosol_properties object failed')
        end if
     !else
-    case ('oslo_sectional')
-       aero_props => sectional_aerosol_properties()
+    case ('fanci')
+       aero_props => fanci_aerosol_properties()
        if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props sectional_aerosol_properties object failed')
+          call endrun(subrname//' : construction of aero_props fanci_aerosol_properties object failed')
        end if
        if (convproc_do_aer) then
    !     convproc_do_aer = .False.
            call endrun(subrname// &
-                   ' : convproc_do_aer=.true. is not supported for the oslo_sectional scheme '// &
-                   '(aero_convproc assumes per-bin mass indexing; sectional carries mass per range). '// &
+                   ' : convproc_do_aer=.true. is not supported for the fanci scheme '// &
+                   '(aero_convproc assumes per-bin mass indexing; fanci carries mass per range). '// &
                    'Set convproc_do_aer=.false.')
        end if
     !endif
@@ -458,9 +458,9 @@ if (masterproc) then
        if (.not.associated(aero_state)) then
           call endrun(subrname//' : construction of aero_state carma_aerosol_state object failed')
        end if
-    case ('oslo_sectional')
-        aero_props => sectional_aerosol_properties()
-        aero_state => sectional_aerosol_state(state, pbuf)
+    case ('fanci')
+        aero_props => fanci_aerosol_properties()
+        aero_state => fanci_aerosol_state(state, pbuf)
     case default
     !else
        call endrun(subrname//' : cannot determine aerosol model')
@@ -833,7 +833,7 @@ if (masterproc) then
 
     end do bins_loop
 
-    if (.not. aero_modelname=='oslo_sectional') then
+    if (.not. aero_modelname=='fanci') then
         if (associated(aero_state)) then
             deallocate(aero_state)
             nullify(aero_state)
@@ -1072,7 +1072,7 @@ if (masterproc) then
       ag0 = dg0/2._r8
       sx = logsig
       xg0 = log( ag0 )
-      if (aero_props%model_is('oslo_sectional')) then
+      if (aero_props%model_is('fanci')) then
           na=1
       else
 
@@ -1157,7 +1157,7 @@ if (masterproc) then
       anumsum = 0._r8
       avolsum = 0._r8
       do i = 1, na
-          if (aero_props%model_is('oslo_sectional')) then
+          if (aero_props%model_is('fanci')) then
 
               ! Assume just one mean value and one bin:
               a = ag0 ! radius of bin center.

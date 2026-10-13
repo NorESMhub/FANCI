@@ -1,9 +1,9 @@
 # ==============================================================================
 # Python script that reads config.ini with parameter settings
-# for the sectional aerosol model in NorESM
+# for the FANCI sectional aerosol model in NorESM
 # Output:
-# namelist oslo_sectional_nl with settings for NorESM
-# my_chem_mech.in: edited to contain aerosol tracers
+# atm_in: edited initial atm_in namelist file with settings for FANCI aerosols
+# my_chem_mech.in: edited chem_mech.in to contain aerosol tracers
 # ==============================================================================
 
 import os
@@ -11,9 +11,10 @@ import logging
 import configparser
 import argparse
 import math
+from datetime import datetime
 
 #logging.basicConfig(level=logging.INFO) # basic level would be "warning"
-logger = logging.getLogger("bin_config")
+logger = logging.getLogger("fanci_config")
 
 class AeroConfigError(Exception):
     pass
@@ -110,7 +111,7 @@ class _AerosolSpecies:
 
 # TODO: bin settings, maybe add 'method' to allow for other than volume ratio. e.g. 'custom' -> user defined bin bounds
 class _BinSpecs:
-    ''' Class representing all attributes associated with the size distribution in the Oslo sectional aerosol model.
+    ''' Class representing all attributes associated with the size distribution in the FANCI sectional aerosol model.
 
     Attributes:
         N (int) : Total number of bins read from the sectional aerosol configuration file
@@ -156,7 +157,7 @@ class _BinSpecs:
 
 class _RangeSpecs:
     ''' Class representing all attributes associated with a chemical composition range in the
-    Oslo sectional aerosol model.
+    FANCI sectional aerosol model.
 
     Attributes:
         ranges (bool) : True if the model should average the chemistry for a range of bins
@@ -205,8 +206,8 @@ class _RangeSpecs:
             for r in range(n):
                 self.nspecies[r] = sum([1 for obj in species_obj_list if r+1 in obj.range_idx])
 
-def bin_config(aerconf_file, chemconf, chem_infile, oslo_sectional_in):
-    ''' Main function called from buildnml if a compset with the oslo sectional aerosol
+def fanci_config(aerconf_file, chemconf, chem_infile, FANCI_in):
+    ''' Main function called from buildnml if a compset with the FANCI sectional aerosol
     model is used. This function is used to initialize instances of the classes above using
     information from the sectional aerosol configuration file.
     It will create a new chemistry mechanism file with added tracers for each aerosol species,
@@ -216,13 +217,13 @@ def bin_config(aerconf_file, chemconf, chem_infile, oslo_sectional_in):
         aerconf_file (str) : The full path to the aerosol configuration file.
                              The name of the file can be changed with the xml variable
                              CAM_AEROSOL_CONFIG. Currently the path is set to
-                             srcroot/src/chemistry/oslo_sectional/config/CAM_AEROSOL_CONFIG
+                             srcroot/src/chemistry/FANCI/config/CAM_AEROSOL_CONFIG
                              in the buildnml script.
         chemconf (str) :     The full path to the chemistry mechanism file. This is the chem_mech.in
                              file in the pp_ chemistry folder associated with the compset
         chem_infile (str) :  The full path to the modified chemconf file with added aerosol tracers.
                              This file is then added to the casefolder.
-        oslo_sectional_in (str) : Full path where the temporary namelist for the sectional aerosol model
+        FANCI_in (str) : Full path where the temporary namelist for the sectional aerosol model
                              is written out. This file is deleted in buildnml after the contents are added
                              to atm_in
     '''
@@ -266,58 +267,58 @@ def bin_config(aerconf_file, chemconf, chem_infile, oslo_sectional_in):
     nspecies_tot = len(active_species_obj_list)
     range_specs.get_nspecies(active_species_obj_list)
     # =====================================================================
-    # Write to temporary oslo_sectional namelist file
+    # Write to temporary FANCI namelist file
     # =====================================================================
 
-    f = open(oslo_sectional_in, "w")
-    f.write("&oslo_sectional_properties_nl\n")
-    f.write(" oslo_sectional_nspecies_tot       =  ")
-    f.write(f"{nspecies_tot} \n")
-    f.write(" oslo_sectional_nbins       =  ")
-    f.write(f"{bin_specs.N} \n")
-    f.write(" oslo_sectional_nranges       =  ")
-    f.write(f"{len(range_specs.range_bnds)-1} \n")
-    f.write(" oslo_sectional_nspecies       =  ")
-    for i in range(0, len(range_specs.range_bnds)-1):
-        f.write(f"{range_specs.nspecies[i]}")
-        if i != len(range_specs.range_bnds)-2:
-            f.write(',')
-    f.write("\n")
-    f.write(" oslo_sectional_bin_bounds     =  ")
-    for i in range(bin_specs.N):
-        f.write(f"'{bin_specs.r_bnds[i]:.3f}D0:{bin_specs.r_bnds[i+1]:.3f}D0'")
-        if i != bin_specs.N-1:
-            f.write(', ')
-    f.write("\n")
+    with open(FANCI_in, "w") as f:
+        f.write("&fanci_properties_nl\n")
+        f.write(" fanci_nspecies_tot       =  ")
+        f.write(f"{nspecies_tot} \n")
+        f.write(" fanci_nbins       =  ")
+        f.write(f"{bin_specs.N} \n")
+        f.write(" fanci_nranges       =  ")
+        f.write(f"{len(range_specs.range_bnds)-1} \n")
+        f.write(" fanci_nspecies       =  ")
+        for i in range(0, len(range_specs.range_bnds)-1):
+            f.write(f"{range_specs.nspecies[i]}")
+            if i != len(range_specs.range_bnds)-2:
+                f.write(',')
+        f.write("\n")
+        f.write(" fanci_bin_bounds     =  ")
+        for i in range(bin_specs.N):
+            f.write(f"'{bin_specs.r_bnds[i]:.3f}D0:{bin_specs.r_bnds[i+1]:.3f}D0'")
+            if i != bin_specs.N-1:
+                f.write(', ')
+        f.write("\n")
 
-    f.write(" oslo_sectional_bin_centers        =  ")
-    for i in range(bin_specs.N):
-        f.write(f"'{bin_specs.r[i]:.3f}D0'")
-        if i != bin_specs.N-1:
-            f.write(', ')
-    f.write("\n")
+        f.write(" fanci_bin_centers        =  ")
+        for i in range(bin_specs.N):
+            f.write(f"'{bin_specs.r[i]:.3f}D0'")
+            if i != bin_specs.N-1:
+                f.write(', ')
+        f.write("\n")
 
-    f.write(" oslo_sectional_range_bounds       =  ")
-    for i in range(len(range_specs.range_bnds)-1):
-        f.write(f"'{range_specs.range_bnd_bin_idx[i][0]}:{range_specs.range_bnd_bin_idx[i][1]}'")
-        if i != len(range_specs.range_bnds)-2:
-            f.write(', ')
-    f.write("\n")
-    f.write("/\n")
+        f.write(" fanci_range_bounds       =  ")
+        for i in range(len(range_specs.range_bnds)-1):
+            f.write(f"'{range_specs.range_bnd_bin_idx[i][0]}:{range_specs.range_bnd_bin_idx[i][1]}'")
+            if i != len(range_specs.range_bnds)-2:
+                f.write(', ')
+        f.write("\n")
+        f.write("/\n")
 
-    for species in species_obj_list:
-        if species.active:
-            f.write("&oslo_sectional_properties_aerosol_nl\n")
-            f.write(f" oslo_sectional_aerosol_name      =  '{species.short_name}' \n")
-            f.write(f" oslo_sectional_aerosol_type = '{species.species_type}' \n")
-            f.write(" oslo_sectional_aerosol_range       =  ")
-            f.write(f"'{species.range_idx[0]}:{species.range_idx[-1]}' \n")
-            f.write(f" oslo_sectional_aerosol_mixed     =  .{species.mixed}. \n")
-            f.write(f" oslo_sectional_aerosol_density   =  {species.density:.3f} \n")
-            f.write(f" oslo_sectional_aerosol_weight    =  {species.molecular_weight:.3f} \n")
-            f.write(f" oslo_sectional_aerosol_kappa =    {species.kappa:.3f} \n")
-            f.write("/\n")
-    f.close()
+        for species in species_obj_list:
+            if species.active:
+                f.write("&fanci_properties_aerosol_nl\n")
+                f.write(f" fanci_aerosol_name      =  '{species.short_name}' \n")
+                f.write(f" fanci_aerosol_type = '{species.species_type}' \n")
+                f.write(" fanci_aerosol_range       =  ")
+                f.write(f"'{species.range_idx[0]}:{species.range_idx[-1]}' \n")
+                f.write(f" fanci_aerosol_mixed     =  .{species.mixed}. \n")
+                f.write(f" fanci_aerosol_density   =  {species.density:.3f} \n")
+                f.write(f" fanci_aerosol_weight    =  {species.molecular_weight:.3f} \n")
+                f.write(f" fanci_aerosol_kappa =    {species.kappa:.3f} \n")
+                f.write("/\n")
+
 
     # ==============================================================================
     # Prepare output for chem_mech.in file
@@ -374,34 +375,34 @@ def bin_config(aerconf_file, chemconf, chem_infile, oslo_sectional_in):
     with open(chem_infile, 'w') as file:
         file.writelines(modified_chem)
 
-def add_oslo_sectional_nl(oslo_atm_nlfile, oslo_sectional_in, atm_nlfile):
-    ''' Function to modify the atm_in namelist file and add the oslo_sectional namelists
+def add_FANCI_nl(tmp_atm_nlfile, FANCI_in, atm_nlfile):
+    ''' Function to modify the atm_in namelist file and add the FANCI namelists
     to it. Called by buildnml. The namelists in the original atm_in file are sorted alphabetically,
     the new namelists are inserted in alphabetical order.
-    Each species gets its own namelist, all are named &oslo_sectional_properties_aerosol_nl and
+    Each species gets its own namelist, all are named & FANCI_properties_aerosol_nl and
     iterated through by the nl reader.
 
     Parameters:
-        oslo_atm_nlfile : full path to the original atm_in file, temporarily moved to oslo_atm_in
-        oslo_sectional_in : full path to the oslo sectional namelists created in bin_config.bin_config
-        atm_nlfile : full path to the final atm_in, combined oslo_atm_nlfile and oslo_sectional_in
+        tmp_atm_nlfile : full path to the original atm_in file, temporarily moved to tmp_atm_in
+        FANCI_in : full path to the FANCI sectional namelists created in fanci_config.fanci_config
+        atm_nlfile : full path to the final atm_in, combined tmp_atm_nlfile and FANCI_in
     '''
     modified_atm_in = []
 
-    with open(oslo_atm_nlfile, 'r') as f1:                  # read atm_in
+    with open(tmp_atm_nlfile, 'r') as f1:                  # read atm_in
         lines = f1.readlines()
-    with open(oslo_sectional_in, 'r') as f2:                # read sectional nl file
-        lines_oslo_sec = f2.readlines()
+    with open(FANCI_in, 'r') as f2:                # read sectional nl file
+        lines_fanci = f2.readlines()
     idx = 0
     for line in lines:
-        if "&" in line and line > lines_oslo_sec[0]:        # write entries before oslo_sectional nl
+        if "&" in line and line > lines_fanci[0]:        # write entries before FANCI nl
             break
         else:
             modified_atm_in.append(line)
             idx += 1
-    for line_oslo in lines_oslo_sec:                        # write oslo sectional nl
+    for line_oslo in lines_fanci:                        # write FANCI nl
         modified_atm_in.append(f"{line_oslo}")
-    for line in lines[idx:]:                                # write entries after oslo sectional nl
+    for line in lines[idx:]:                                # write entries after FANCI nl
         modified_atm_in.append(f"{line}")
 
     with open(atm_nlfile, 'w') as atm_infile:               # write out modified nlfile to "atm_in"
@@ -417,7 +418,7 @@ def _main_func():
     parser.add_argument('--atm_in_new', required=True, help='Path to new atm_in file with sectional aerosol info')
     args = parser.parse_args()
 
-    oslo_sectional_in = 'oslo_sectional_in' # temporary nl file with sectional info
+    FANCI_in = f'FANCI_tmp_{datetime.today().strftime('%Y%m%d%H%M%S')}' # temporary nl file with sectional info
 
     try:
         if not os.path.isfile(args.aerconf):
@@ -430,10 +431,10 @@ def _main_func():
         logger.error(errmsg)
 
 
-    bin_config(args.aerconf, args.chem_mech, args.chem_mech_new, oslo_sectional_in)
-    add_oslo_sectional_nl(args.atm_in, oslo_sectional_in, args.atm_in_new)
+    fanci_config(args.aerconf, args.chem_mech, args.chem_mech_new, FANCI_in)
+    add_FANCI_nl(args.atm_in, FANCI_in, args.atm_in_new)
 
-    os.remove(oslo_sectional_in)
+    os.remove(FANCI_in)
 
 if __name__ == "__main__":
     _main_func()

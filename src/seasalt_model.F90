@@ -10,7 +10,7 @@ module seasalt_model
   use cam_logfile,     only: iulog
   use cam_abortutils,  only: endrun
   use aerosol_properties_mod, only: aerosol_properties
-  use sectional_aerosol_properties_mod, only: sectional_aerosol_properties
+  use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
 
   implicit none
   private
@@ -36,7 +36,7 @@ module seasalt_model
      use constituents,  only: cnst_get_ind
      use string_utils,  only: int2str
 
-     type(sectional_aerosol_properties), intent(in) :: aero_props
+     type(fanci_aerosol_properties), intent(in) :: aero_props
 
      ! local variables
      integer              :: ispecprop, ibin, irange
@@ -71,7 +71,7 @@ module seasalt_model
     integer,  intent(in)    :: ncol
     real(r8), intent(inout) :: cflx(:,:)
 
-    type(sectional_aerosol_properties), intent(in) :: aero_props
+    type(fanci_aerosol_properties), intent(in) :: aero_props
 
     !--------CMS (Clarke, Monahan, and Smith source function) from CARMA: carma_model_mod.F90 /src/physics/carma/models/sea_salt/carma_model_mod.F90
 

@@ -11,7 +11,7 @@ Contains files from OsloAero and CAM that are currently necessary to make the FA
 ## src
 The FANCI source code.
 
-## ../pp_dust_oslo_sectional
+## ../pp_fanci
 * chemistry.F90
 * chem_mech.in
 

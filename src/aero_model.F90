@@ -1,5 +1,5 @@
 !===============================================================================
-! Sectional Aerosol Model
+! FANCI Sectional Aerosol Model
 !===============================================================================
 module aero_model
   use shr_kind_mod,      only: r8 => shr_kind_r8
@@ -19,8 +19,8 @@ module aero_model
   use physics_buffer,    only: pbuf_get_field, pbuf_get_index, pbuf_get_chunk
   use cam_history,       only: outfld
   use infnan,            only: nan, assignment(=)
-  use sectional_aerosol_properties_mod, only: sectional_aerosol_properties
-  use sectional_aerosol_state_mod, only: sectional_aerosol_state, aero_state_ptr
+  use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
+  use fanci_aerosol_state_mod, only: fanci_aerosol_state, aero_state_ptr
   use string_utils,      only: int2str
 
   implicit none
@@ -39,7 +39,7 @@ module aero_model
 
   ! name of the aerosol scheme
   public :: aero_modelname
-  character(len=*), parameter :: aero_modelname = 'oslo_sectional'
+  character(len=*), parameter :: aero_modelname = 'fanci'
 
  ! Misc private data
 
@@ -62,8 +62,8 @@ module aero_model
   integer :: fracis_idx = 0
   integer :: prain_idx  = 0
 
-  type(sectional_aerosol_properties), pointer :: aero_props=>null()
-  !type(sectional_aerosol_state), pointer :: aero_state=>null()
+  type(fanci_aerosol_properties), pointer :: aero_props=>null()
+  !type(fanci_aerosol_state), pointer :: aero_state=>null()
 
   type(aero_state_ptr), allocatable :: master_aero_state(:)
 
@@ -96,7 +96,7 @@ contains
     call dust_readnl(nlfile)
 
     if (.not. aerodep_flx_prescribed()) then
-        aero_props => sectional_aerosol_properties(nlfile) ! calls constructor function in sectional_aerosol_properties
+        aero_props => fanci_aerosol_properties(nlfile) ! calls constructor function in fanci_aerosol_properties
     end if
 
     ! initialize props
@@ -168,13 +168,13 @@ contains
                        history_chemistry_out = history_chemistry   )
 
     if (.not. aerodep_flx_prescribed()) then
-        aero_props => sectional_aerosol_properties() ! calls constructor function in sectional_aerosol_properties
+        aero_props => fanci_aerosol_properties() ! calls constructor function in fanci_aerosol_properties
         allocate(master_aero_state(begchunk:endchunk))
         do lchnk = begchunk, endchunk
             phys_buffer_chunk => pbuf_get_chunk(pbuf2d, lchnk)
-            master_aero_state(lchnk)%ptr => sectional_aerosol_state(phys_state(lchnk), phys_buffer_chunk)
+            master_aero_state(lchnk)%ptr => fanci_aerosol_state(phys_state(lchnk), phys_buffer_chunk)
         end do
-  !     aero_state => sectional_aerosol_state(phys_state, pbuf)
+  !     aero_state => fanci_aerosol_state(phys_state, pbuf)
       !  end do
         call aero_deposition_cam_init(aero_props)
     end if
