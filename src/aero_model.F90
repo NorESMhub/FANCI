@@ -529,7 +529,7 @@ end function aero_model_get_state
                 call dust_sediment_tend(ncol, dt, state%pint(:,:), state%pmid, state%pdel, state%t, bin_num(:,:), pvmzaer, bin_num_tend(:,:, ibin), sflx_num )
                 call dust_sediment_tend(ncol, dt, state%pint(:,:), state%pmid, state%pdel, state%t, bin_mmr_tot(:,:), pvmzaer, bin_mmr_tend(:,:), sflx )
                 ! calculate #/kg tendency and put tendency to state
-                bin_num = bin_num + bin_num_tend(:ncol,:, ibin)
+                bin_num = bin_num + bin_num_tend(:ncol,:, ibin)*dt
 
                 dep_trb = 0._r8
                 dep_grv = 0._r8
@@ -567,7 +567,7 @@ end function aero_model_get_state
             ! move tendency into aero range state
             bin_ndx = aero_props%range_bounds(irange, 1)
             call master_aero_state(lchnk)%ptr%get_ambient_mmr_0list(ispec, bin_ndx, range_mmr)
-            range_mmr(:ncol,:) = range_mmr(:ncol,:) + range_mmr_tend(:ncol,:,irange)*massfrac(:ncol, :)
+            range_mmr(:ncol,:) = range_mmr(:ncol,:) + range_mmr_tend(:ncol,:,irange)*massfrac(:ncol, :)*dt
 
             ! use mass fractions at lowest level to get surface flux TODO: sedimentation out of higher layers?
             do icol = 1, ncol
