@@ -61,7 +61,6 @@ module save mod_noresm
 then next time
 ```bash
 module r mod_noresm
-
 ```
 Then run:
 
@@ -71,7 +70,7 @@ Then run:
 
 This checks out `src/chemistry/FANCI` and the other externals at their pinned commits.
 
-## 5. Set up this aerosol repo for development
+## 6. Set up this aerosol repo for development
 
 `git-fleximod` leaves `src/chemistry/FANCI` on a detached commit pointing at NorESMhub's
 `FANCI`. Repoint `origin` at your fork so you can commit and push:
@@ -88,7 +87,7 @@ cd -
 > After this, `git-fleximod update`
 > will warn about the modified external — that is expected; do not let it reset your branch.
 
-## 6. Run the FANCI test suite
+## 7. Run the FANCI test suite
 
 From the `CAM` root:
 
