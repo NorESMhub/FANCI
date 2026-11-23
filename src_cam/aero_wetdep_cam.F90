@@ -16,17 +16,12 @@ module aero_wetdep_cam
   use cam_history,   only: addfld, add_default, horiz_only, outfld
   use wetdep,        only: wetdep_init
 
-  use rad_constituents, only: rad_cnst_get_info
 
   use aerosol_properties_mod, only: aero_name_len
   use aerosol_properties_mod, only: aerosol_properties
-  use modal_aerosol_properties_mod, only: modal_aerosol_properties
-  use carma_aerosol_properties_mod, only: carma_aerosol_properties
   use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
 
   use aerosol_state_mod, only: aerosol_state, ptr2d_t
-  use modal_aerosol_state_mod, only: modal_aerosol_state
-  use carma_aerosol_state_mod, only: carma_aerosol_state
   use fanci_aerosol_state_mod, only: fanci_aerosol_state
 
   use aero_convproc, only: aero_convproc_readnl, aero_convproc_init, aero_convproc_intr
@@ -45,8 +40,6 @@ module aero_wetdep_cam
   public :: aero_wetdep_init
   public :: aero_wetdep_tend
 
-! TODO: if we use this from aero_model.F90, then we have a circular dependency.. use model_is function?
-  character(len=*), parameter :: aero_modelname= 'fanci'
 
   real(r8), parameter :: NOTSET = -huge(1._r8)
   real(r8) :: sol_facti_cloud_borne   = NOTSET
@@ -72,8 +65,6 @@ module aero_wetdep_cam
   real(r8),allocatable :: scavimptblnum(:,:)
   real(r8),allocatable :: scavimptblvol(:,:)
 
-  integer :: nmodes=0
-  integer :: nbins=0
   integer :: nspec_max=0
   integer :: nele_tot            ! total number of aerosol elements
   class(aerosol_properties), pointer :: aero_props=>null()
@@ -179,38 +170,18 @@ contains
                       history_chemistry_out=history_chemistry, &
                       convproc_do_aer_out = convproc_do_aer)
 
-    call rad_cnst_get_info(0, nmodes=nmodes, nbins=nbins)
 
-    select case(aero_modelname)
-    case ('mam')
-    !if (nmodes>0) then
-       aero_props => modal_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props modal_aerosol_properties object failed')
-       end if
-    !else if (nbins>0) then
-    case ('carma')
-       aero_props => carma_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props carma_aerosol_properties object failed')
-       end if
-    !else
-    case ('fanci')
-       aero_props => fanci_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props fanci_aerosol_properties object failed')
-       end if
-       if (convproc_do_aer) then
-   !     convproc_do_aer = .False.
-           call endrun(subrname// &
+    aero_props => fanci_aerosol_properties()
+    if (.not.associated(aero_props)) then
+        call endrun(subrname//' : construction of aero_props fanci_aerosol_properties object failed')
+    end if
+    if (convproc_do_aer) then
+   !    convproc_do_aer = .False.
+        call endrun(subrname// &
                    ' : convproc_do_aer=.true. is not supported for the fanci scheme '// &
                    '(aero_convproc assumes per-bin mass indexing; fanci carries mass per range). '// &
                    'Set convproc_do_aer=.false.')
-       end if
-    !endif
-    case default
-        call endrun(subrname//' : cannot determine aerosol model')
-    end select
+    end if
 
     nele_tot = aero_props%ncnst_tot()
 
@@ -460,27 +431,8 @@ if (masterproc) then
 
     dcondt_resusp3d(:,:,:) = 0._r8
 
-    select case(aero_modelname)
-    !if (nmodes>0) then
-    case ('mam')
-       aero_state => modal_aerosol_state(state,pbuf)
-       if (.not.associated(aero_state)) then
-          call endrun(subrname//' : construction of aero_state modal_aerosol_state object failed')
-       end if
-    !else if (nbins>0) then
-    case ('carma')
-       aero_state => carma_aerosol_state(state,pbuf)
-       if (.not.associated(aero_state)) then
-          call endrun(subrname//' : construction of aero_state carma_aerosol_state object failed')
-       end if
-    case ('fanci')
-        aero_props => fanci_aerosol_properties()
-        aero_state => fanci_aerosol_state(state, pbuf)
-    case default
-    !else
-       call endrun(subrname//' : cannot determine aerosol model')
-    !endif
-    end select
+    aero_props => fanci_aerosol_properties()
+    aero_state => fanci_aerosol_state(state, pbuf)
 
     lchnk = state%lchnk
     ncol = state%ncol
@@ -567,159 +519,156 @@ if (masterproc) then
         ! This block runs before bins_loop so that the interstitial scavenging sees the
         ! cloud-borne mass from before cloud-borne removal, as in the original phase order.
         ! Assumes convproc_do_aer = .false. (stopped for FANCI in aero_wetdep_init).
-        interstitial_mass: if (aero_modelname == 'fanci') then
 
-            fanci_aero_props => fanci_aerosol_properties()
-            allocate(cw_w(pcols, pver, aero_props%nbins()))
-            cw_w = 0._r8
+       fanci_aero_props => fanci_aerosol_properties()
+       allocate(cw_w(pcols, pver, aero_props%nbins()))
+       cw_w = 0._r8
 
-            cldbrn     = .false.
-            sol_facti  = 0.0_r8                        ! strat in-cloud scav totally OFF for interstitial
-            sol_factic = sol_factic_interstitial
+       cldbrn     = .false.
+       sol_facti  = 0.0_r8                        ! strat in-cloud scav totally OFF for interstitial
+       sol_factic = sol_factic_interstitial
 
-            range_loop: do irange = 1, fanci_aero_props%nranges()
+       range_loop: do irange = 1, fanci_aero_props%nranges()
 
-                b1 = fanci_aero_props%range_bounds(irange,1)   ! leader bin: owns the mass tracers
-                b2 = fanci_aero_props%range_bounds(irange,2)
+           b1 = fanci_aero_props%range_bounds(irange,1)   ! leader bin: owns the mass tracers
+           b2 = fanci_aero_props%range_bounds(irange,2)
 
-                ! range totals; the mass tracers live on the leader bin
-                range_mmr    = 0._r8
-                range_cw_mmr = 0._r8
-                do ispec = 1, fanci_aero_props%range_nspecies(irange)
-                    call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
-                    range_mmr(:ncol,:) = range_mmr(:ncol,:) + mmr_s(:ncol,:)
-                    call aero_state%get_cldbrne_mmr(ispec, b1, mmr_s)
-                    range_cw_mmr(:ncol,:) = range_cw_mmr(:ncol,:) + mmr_s(:ncol,:)
-                end do
+           ! range totals; the mass tracers live on the leader bin
+           range_mmr    = 0._r8
+           range_cw_mmr = 0._r8
+           do ispec = 1, fanci_aero_props%range_nspecies(irange)
+               call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
+               range_mmr(:ncol,:) = range_mmr(:ncol,:) + mmr_s(:ncol,:)
+               call aero_state%get_cldbrne_mmr(ispec, b1, mmr_s)
+               range_cw_mmr(:ncol,:) = range_cw_mmr(:ncol,:) + mmr_s(:ncol,:)
+           end do
 
-                ! weights for splitting the range's cloud-borne mass among its bins:
-                ! cloud-borne number x ambient mass per particle (abstract interface only)
-                cw_wsum = 0._r8
-                do ibin = b1, b2
-                    call aero_state%get_cldbrne_num(ibin, num_cw)
-                    call aero_state%get_ambient_num(ibin, num_amb)
-                    do k = 1, pver
-                        do i = 1, ncol
-                            cw_w(i,k,ibin) = num_cw(i,k) &
-                                    * aero_state%ambient_total_bin_mmr(aero_props, ibin, i, k) &
-                                    / max(num_amb(i,k), tiny(1._r8))
-                        end do
-                    end do
-                    cw_wsum(:ncol,:) = cw_wsum(:ncol,:) + cw_w(:ncol,:,ibin)
-                end do
+           ! weights for splitting the range's cloud-borne mass among its bins:
+           ! cloud-borne number x ambient mass per particle (abstract interface only)
+           cw_wsum = 0._r8
+           do ibin = b1, b2
+               call aero_state%get_cldbrne_num(ibin, num_cw)
+               call aero_state%get_ambient_num(ibin, num_amb)
+               do k = 1, pver
+                   do i = 1, ncol
+                       cw_w(i,k,ibin) = num_cw(i,k) &
+                               * aero_state%ambient_total_bin_mmr(aero_props, ibin, i, k) &
+                               / max(num_amb(i,k), tiny(1._r8))
+                   end do
+               end do
+               cw_wsum(:ncol,:) = cw_wsum(:ncol,:) + cw_w(:ncol,:,ibin)
+           end do
 
-                range_mmr_tend = 0._r8
-                range_fracis   = 0._r8
-                range_wsum     = 0._r8
-                range_icscavt  = 0._r8
-                range_isscavt  = 0._r8
-                range_bcscavt  = 0._r8
-                range_bsscavt  = 0._r8
+           range_mmr_tend = 0._r8
+           range_fracis   = 0._r8
+           range_wsum     = 0._r8
+           range_icscavt  = 0._r8
+           range_isscavt  = 0._r8
+           range_bcscavt  = 0._r8
+           range_bsscavt  = 0._r8
 
-                bin_loop: do ibin = b1, b2
+           bin_loop: do ibin = b1, b2
 
-                    ! this bin's own total dry mass and cloud-borne mass
-                    do k = 1, pver
-                        do i = 1, ncol
-                            bin_mmr_tot(i,k) = aero_state%ambient_total_bin_mmr(aero_props, ibin, i, k)
-                        end do
-                    end do
-                    bin_cw_mmr = 0._r8
-                    where (cw_wsum(:ncol,:) > 0._r8) &
-                            bin_cw_mmr(:ncol,:) = range_cw_mmr(:ncol,:)*cw_w(:ncol,:,ibin)/cw_wsum(:ncol,:)
+               ! this bin's own total dry mass and cloud-borne mass
+               do k = 1, pver
+                   do i = 1, ncol
+                       bin_mmr_tot(i,k) = aero_state%ambient_total_bin_mmr(aero_props, ibin, i, k)
+                   end do
+               end do
+               bin_cw_mmr = 0._r8
+               where (cw_wsum(:ncol,:) > 0._r8) &
+                       bin_cw_mmr(:ncol,:) = range_cw_mmr(:ncol,:)*cw_w(:ncol,:,ibin)/cw_wsum(:ncol,:)
 
-                    ! this bin's own size, coefficient and factors (as at the top of bins_loop)
-                    diam_wet = aero_state%wet_diameter(ibin, ncol, pver)
-                    scavcoefnv = 0.0_r8
-                    call get_bcscavcoefs( ibin, ncol, isprx, diam_wet, scavcoefnv(:,:,1), scavcoefnv(:,:,2) )
+               ! this bin's own size, coefficient and factors (as at the top of bins_loop)
+               diam_wet = aero_state%wet_diameter(ibin, ncol, pver)
+               scavcoefnv = 0.0_r8
+               call get_bcscavcoefs( ibin, ncol, isprx, diam_wet, scavcoefnv(:,:,1), scavcoefnv(:,:,2) )
 
-                    if ( sol_factb_interstitial /= NOTSET ) then
-                        sol_factb(:ncol,:) = sol_factb_interstitial
-                    else
-                        sol_factb(:ncol,:) = aero_state%sol_factb_interstitial( ibin, ncol, pver, aero_props )
-                    end if
-                    f_act_conv(:ncol,:) = aero_state%convcld_actfrac( ibin, 1, ncol, pver )
+               if ( sol_factb_interstitial /= NOTSET ) then
+                   sol_factb(:ncol,:) = sol_factb_interstitial
+               else
+                   sol_factb(:ncol,:) = aero_state%sol_factb_interstitial( ibin, ncol, pver, aero_props )
+               end if
+               f_act_conv(:ncol,:) = aero_state%convcld_actfrac( ibin, 1, ncol, pver )
 
-                    dqdt_tmp(1:ncol,:) = 0.0_r8
+               dqdt_tmp(1:ncol,:) = 0.0_r8
 
-                    call wetdepa_v2(state%pmid, state%q(:,:,1), state%pdel, &
-                            dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
-                            dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
-                            dep_inputs%evapr, dep_inputs%totcond, bin_mmr_tot, dt, &
-                            dqdt_tmp, iscavt, dep_inputs%cldvcu, dep_inputs%cldvst, &
-                            dlf, bin_fracis, sol_factb, ncol, &
-                            scavcoefnv(:,:,2), &
-                            is_strat_cloudborne=cldbrn, &
-                            qqcw=bin_cw_mmr, f_act_conv=f_act_conv, &
-                            icscavt=icscavt, isscavt=isscavt, bcscavt=bcscavt, bsscavt=bsscavt, &
-                            convproc_do_aer=convproc_do_aer, rcscavt=rcscavt, rsscavt=rsscavt, &
-                            sol_facti_in=sol_facti, sol_factic_in=sol_factic, &
-                            convproc_do_evaprain_atonce_in=convproc_do_evaprain_atonce, &
-                            bergso_in=dep_inputs%bergso )
+               call wetdepa_v2(state%pmid, state%q(:,:,1), state%pdel, &
+                       dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
+                       dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
+                       dep_inputs%evapr, dep_inputs%totcond, bin_mmr_tot, dt, &
+                       dqdt_tmp, iscavt, dep_inputs%cldvcu, dep_inputs%cldvst, &
+                       dlf, bin_fracis, sol_factb, ncol, &
+                       scavcoefnv(:,:,2), &
+                       is_strat_cloudborne=cldbrn, &
+                       qqcw=bin_cw_mmr, f_act_conv=f_act_conv, &
+                       icscavt=icscavt, isscavt=isscavt, bcscavt=bcscavt, bsscavt=bsscavt, &
+                       convproc_do_aer=convproc_do_aer, rcscavt=rcscavt, rsscavt=rsscavt, &
+                       sol_facti_in=sol_facti, sol_factic_in=sol_factic, &
+                       convproc_do_evaprain_atonce_in=convproc_do_evaprain_atonce, &
+                       bergso_in=dep_inputs%bergso )
 
-                    ! add up the bins of the range
-                    range_mmr_tend(:ncol,:) = range_mmr_tend(:ncol,:) + dqdt_tmp(:ncol,:)
-                    range_fracis(:ncol,:)   = range_fracis(:ncol,:) + bin_fracis(:ncol,:)*bin_mmr_tot(:ncol,:)
-                    range_wsum(:ncol,:)     = range_wsum(:ncol,:)   + bin_mmr_tot(:ncol,:)
-                    range_icscavt(:ncol,:)  = range_icscavt(:ncol,:) + icscavt(:ncol,:)
-                    range_isscavt(:ncol,:)  = range_isscavt(:ncol,:) + isscavt(:ncol,:)
-                    range_bcscavt(:ncol,:)  = range_bcscavt(:ncol,:) + bcscavt(:ncol,:)
-                    range_bsscavt(:ncol,:)  = range_bsscavt(:ncol,:) + bsscavt(:ncol,:)
+               ! add up the bins of the range
+               range_mmr_tend(:ncol,:) = range_mmr_tend(:ncol,:) + dqdt_tmp(:ncol,:)
+               range_fracis(:ncol,:)   = range_fracis(:ncol,:) + bin_fracis(:ncol,:)*bin_mmr_tot(:ncol,:)
+               range_wsum(:ncol,:)     = range_wsum(:ncol,:)   + bin_mmr_tot(:ncol,:)
+               range_icscavt(:ncol,:)  = range_icscavt(:ncol,:) + icscavt(:ncol,:)
+               range_isscavt(:ncol,:)  = range_isscavt(:ncol,:) + isscavt(:ncol,:)
+               range_bcscavt(:ncol,:)  = range_bcscavt(:ncol,:) + bcscavt(:ncol,:)
+               range_bsscavt(:ncol,:)  = range_bsscavt(:ncol,:) + bsscavt(:ncol,:)
 
-                end do bin_loop
+           end do bin_loop
 
-                ! mass weighted fraction not scavenged (used by convective transport)
-                where (range_wsum(:ncol,:) > 0._r8)
-                    range_fracis(:ncol,:) = range_fracis(:ncol,:)/range_wsum(:ncol,:)
-                elsewhere
-                    range_fracis(:ncol,:) = 1._r8
-                end where
+           ! mass weighted fraction not scavenged (used by convective transport)
+           where (range_wsum(:ncol,:) > 0._r8)
+               range_fracis(:ncol,:) = range_fracis(:ncol,:)/range_wsum(:ncol,:)
+           elsewhere
+               range_fracis(:ncol,:) = 1._r8
+           end where
 
-                ! split the range tendency over the species and apply it
-                do ispec = 1, fanci_aero_props%range_nspecies(irange)
+           ! split the range tendency over the species and apply it
+           do ispec = 1, fanci_aero_props%range_nspecies(irange)
 
-                    ndx = aero_cnst_id(b1, ispec)
-                    if (ndx < 1) cycle
+               ndx = aero_cnst_id(b1, ispec)
+               if (ndx < 1) cycle
 
-                    call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
-                    massfrac = 0._r8
-                    where (range_mmr(:ncol,:) > 0._r8) &
-                            massfrac(:ncol,:) = mmr_s(:ncol,:)/range_mmr(:ncol,:)
+               call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
+               massfrac = 0._r8
+               where (range_mmr(:ncol,:) > 0._r8) &
+                       massfrac(:ncol,:) = mmr_s(:ncol,:)/range_mmr(:ncol,:)
 
-                    dqdt_tmp(:ncol,:)    = range_mmr_tend(:ncol,:)*massfrac(:ncol,:)
-                    ptend%q(:ncol,:,ndx) = ptend%q(:ncol,:,ndx) + dqdt_tmp(:ncol,:)
-                    fracis(:ncol,:,ndx)  = range_fracis(:ncol,:)
+               dqdt_tmp(:ncol,:)    = range_mmr_tend(:ncol,:)*massfrac(:ncol,:)
+               ptend%q(:ncol,:,ndx) = ptend%q(:ncol,:,ndx) + dqdt_tmp(:ncol,:)
+               fracis(:ncol,:,ndx)  = range_fracis(:ncol,:)
 
-                    call aero_props%mmr_names( b1, ispec, aname, cname)
+               call aero_props%mmr_names( b1, ispec, aname, cname)
 
-                    call outfld( trim(aname)//'WET', dqdt_tmp, pcols, lchnk)
-                    call outfld( trim(aname)//'SIC', range_icscavt*massfrac, pcols, lchnk)
-                    call outfld( trim(aname)//'SIS', range_isscavt*massfrac, pcols, lchnk)
-                    call outfld( trim(aname)//'SBC', range_bcscavt*massfrac, pcols, lchnk)
-                    call outfld( trim(aname)//'SBS', range_bsscavt*massfrac, pcols, lchnk)
-                    call outfld( trim(aname)//'INS', range_fracis, pcols, lchnk)
+               call outfld( trim(aname)//'WET', dqdt_tmp, pcols, lchnk)
+               call outfld( trim(aname)//'SIC', range_icscavt*massfrac, pcols, lchnk)
+               call outfld( trim(aname)//'SIS', range_isscavt*massfrac, pcols, lchnk)
+               call outfld( trim(aname)//'SBC', range_bcscavt*massfrac, pcols, lchnk)
+               call outfld( trim(aname)//'SBS', range_bsscavt*massfrac, pcols, lchnk)
+               call outfld( trim(aname)//'INS', range_fracis, pcols, lchnk)
 
-                    call column_integral( dqdt_tmp, sflx )
-                    aerdepwetis(:ncol,ndx) = aerdepwetis(:ncol,ndx) + sflx(:ncol)
-                    call outfld( trim(aname)//'SFWET', aerdepwetis(:ncol,ndx), ncol, lchnk)
+               call column_integral( dqdt_tmp, sflx )
+               aerdepwetis(:ncol,ndx) = aerdepwetis(:ncol,ndx) + sflx(:ncol)
+               call outfld( trim(aname)//'SFWET', aerdepwetis(:ncol,ndx), ncol, lchnk)
 
-                    call column_integral( range_icscavt*massfrac, sflx )
-                    call outfld( trim(aname)//'SFSIC', sflx, pcols, lchnk)
-                    call column_integral( range_isscavt*massfrac, sflx )
-                    call outfld( trim(aname)//'SFSIS', sflx, pcols, lchnk)
-                    call column_integral( range_bcscavt*massfrac, sflx )
-                    call outfld( trim(aname)//'SFSBC', sflx, pcols, lchnk)
-                    call column_integral( range_bsscavt*massfrac, sflx )
-                    call outfld( trim(aname)//'SFSBS', sflx, pcols, lchnk)
+               call column_integral( range_icscavt*massfrac, sflx )
+               call outfld( trim(aname)//'SFSIC', sflx, pcols, lchnk)
+               call column_integral( range_isscavt*massfrac, sflx )
+               call outfld( trim(aname)//'SFSIS', sflx, pcols, lchnk)
+               call column_integral( range_bcscavt*massfrac, sflx )
+               call outfld( trim(aname)//'SFSBC', sflx, pcols, lchnk)
+               call column_integral( range_bsscavt*massfrac, sflx )
+               call outfld( trim(aname)//'SFSBS', sflx, pcols, lchnk)
 
-                end do ! species loop
-            end do range_loop
+           end do ! species loop
+       end do range_loop
 
-            deallocate(cw_w)
+       deallocate(cw_w)
 
-        end if interstitial_mass
-
-        bins_loop: do m = 1,aero_props%nbins()
+       bins_loop: do m = 1,aero_props%nbins()
 
        phase_loop: do lphase = strt_loop,end_loop, stride_loop ! loop over interstitial (1) and cloud-borne (2) forms
 
@@ -776,9 +725,8 @@ if (masterproc) then
 
                     ndx = aero_cnst_id(m,l)
                     if (ndx<1) cycle elem_loop
-                    ! FANCI: interstitial mass is wet deposited per bin in the interstitial_mass block above
-                    if (aero_modelname == 'fanci' .and. lphase == 1 .and. l >= 1) cycle elem_loop
-
+                    if (lphase == 1 .and. l >= 1) cycle elem_loop
+             ! interstitial mass is wet deposited per bin in range_loop above
              if (.not. cldbrn .and. ndx>0) then
                 insolfr_ptr => fracis(:,:,ndx)
              else
@@ -1010,13 +958,6 @@ if (masterproc) then
        end do phase_loop
 
     end do bins_loop
-
-    if (.not. aero_modelname=='fanci') then
-        if (associated(aero_state)) then
-            deallocate(aero_state)
-            nullify(aero_state)
-        end if
-    end if
 
     ! if the user has specified prescribed aerosol dep fluxes then
     ! do not set cam_out dep fluxes according to the prognostic aerosols
