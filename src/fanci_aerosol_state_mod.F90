@@ -66,6 +66,7 @@ module fanci_aerosol_state_mod
      procedure :: get_transported               ! done
      procedure :: set_transported               ! done
      procedure :: ambient_total_bin_mmr         ! done
+     procedure :: cldbrne_total_bin_mmr         ! FANCI only (not in the abstract aerosol_state)
      procedure :: get_ambient_mmr_0list         ! done
      procedure :: get_ambient_mmr_rlist   ! TODO
      procedure :: get_cldbrne_mmr               ! done
@@ -446,7 +447,7 @@ contains
   !------------------------------------------------------------------------
   function ambient_total_bin_mmr(self, aero_props, bin_ndx, col_ndx, lyr_ndx) result(mmr_tot)
     class(fanci_aerosol_state), intent(in) :: self
-    class(aerosol_properties), intent(in) :: aero_props
+    class(aerosol_properties), intent(in) :: aero_props ! Not used
     integer, intent(in) :: bin_ndx      ! bin index
     integer, intent(in) :: col_ndx      ! column index
     integer, intent(in) :: lyr_ndx      ! vertical layer index
@@ -466,6 +467,58 @@ contains
                 * self%aero_range_state(irange)%dry_density(col_ndx, lyr_ndx)
 
   end function ambient_total_bin_mmr
+
+
+
+      !------------------------------------------------------------------------
+      ! Total cloud-borne aerosol mass mixing ratio for a bin in a given grid box
+      ! location (column and layer).
+      !
+      ! Cloud-borne mass is stored per range (mmr_cw), cloud-borne number per bin.
+      ! The range's cloud-borne mass is split over its bins in proportion to the
+      ! cloud-borne dry volume of each bin, N_cw(k) * v#_k:
+      !
+      !   mmr(k) = range_cw_mmr * (N_cw(k) v#_k )/ sum_j( N_cw(j) v#_j )
+      !
+      ! This is the same as ambient_total_bin_mmr, where dry_density = range mass /
+      ! sum_j( N(j) v#_j ). The bins of a range add up to the range's cloud-borne
+      ! mass exactly. Computed from the current cloud-borne fields (no cached values).
+      ! Returns 0 if the range has (almost) no cloud-borne volume.
+      !------------------------------------------------------------------------
+      function cldbrne_total_bin_mmr(self, aero_props, bin_ndx, col_ndx, lyr_ndx) result(mmr_tot)
+        class(fanci_aerosol_state), intent(in) :: self
+        class(aerosol_properties), intent(in) :: aero_props  ! not used; same arguments as ambient_total_bin_mmr
+        integer, intent(in) :: bin_ndx      ! bin number
+        integer, intent(in) :: col_ndx      ! column index
+        integer, intent(in) :: lyr_ndx      ! vertical layer index
+
+        real(r8) :: mmr_tot                 ! cloud-borne mass in the bin, all species (kg/kg)
+
+        integer  :: irange, ibin
+        real(r8) :: range_cw_mmr            ! cloud-borne mass of the range, all species (kg/kg)
+        real(r8) :: range_cw_vol            ! cloud-borne dry volume of the range (m3/kg)
+        real(r8) :: bin_cw_vol              ! cloud-borne dry volume of this bin (m3/kg)
+
+        character(len=*), parameter :: subname = 'cldbrne_total_bin_mmr'
+
+        irange = self%sec_aero_props%bins2ranges(bin_ndx)
+
+        range_cw_mmr = sum(self%aero_range_state(irange)%mmr_cw(col_ndx, lyr_ndx, :))
+
+        range_cw_vol = 0._r8
+        do ibin = self%sec_aero_props%range_bounds(irange, 1), self%sec_aero_props%range_bounds(irange, 2)
+            range_cw_vol = range_cw_vol &
+                             + self%bin_numconc_cw(col_ndx, lyr_ndx, ibin) * self%sec_aero_props%particle_volume(ibin)
+        end do
+        bin_cw_vol = self%bin_numconc_cw(col_ndx, lyr_ndx, bin_ndx) * self%sec_aero_props%particle_volume(bin_ndx)
+
+        if ( range_cw_vol > dryvol_min ) then
+            mmr_tot = range_cw_mmr * bin_cw_vol / range_cw_vol
+        else
+            mmr_tot = 0._r8
+        end if
+
+      end function cldbrne_total_bin_mmr
 
   !------------------------------------------------------------------------------
   ! returns ambient aerosol mass mixing ratio for a given species index and bin index
