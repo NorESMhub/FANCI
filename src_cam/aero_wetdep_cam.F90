@@ -16,37 +16,26 @@ module aero_wetdep_cam
   use cam_history,   only: addfld, add_default, horiz_only, outfld
   use wetdep,        only: wetdep_init
 
-  use rad_constituents, only: rad_cnst_get_info
 
   use aerosol_properties_mod, only: aero_name_len
   use aerosol_properties_mod, only: aerosol_properties
-  use modal_aerosol_properties_mod, only: modal_aerosol_properties
-  use carma_aerosol_properties_mod, only: carma_aerosol_properties
   use fanci_aerosol_properties_mod, only: fanci_aerosol_properties
 
   use aerosol_state_mod, only: aerosol_state, ptr2d_t
-  use modal_aerosol_state_mod, only: modal_aerosol_state
-  use carma_aerosol_state_mod, only: carma_aerosol_state
   use fanci_aerosol_state_mod, only: fanci_aerosol_state
 
-  use aero_convproc, only: aero_convproc_readnl, aero_convproc_init, aero_convproc_intr
-  use aero_convproc, only: convproc_do_evaprain_atonce
-  use aero_convproc, only: deepconv_wetdep_history
+  ! Unified convective processing (aero_convproc, convproc_do_aer) is not implemented for FANCI.
+  ! It could be added later; the full wet deposition side of it is in CAM's generic
+  ! chemistry/aerosol/aero_wetdep_cam.F90 (and in this file's git history before option 3).
+  ! aero_convproc assumes per-bin mass tracers, FANCI carries mass per range.
 
-  use infnan,         only: nan, assignment(=)
-  use perf_mod,       only: t_startf, t_stopf
-
-!  use aero_model,     only: aero_modelname
-
-  implicit none
+  implicit none                                 
   private
 
   public :: aero_wetdep_readnl
   public :: aero_wetdep_init
   public :: aero_wetdep_tend
 
-! TODO: if we use this from aero_model.F90, then we have a circular dependency.. use model_is function?
-  character(len=*), parameter :: aero_modelname= 'fanci'
 
   real(r8), parameter :: NOTSET = -huge(1._r8)
   real(r8) :: sol_facti_cloud_borne   = NOTSET
@@ -54,14 +43,12 @@ module aero_wetdep_cam
   real(r8) :: sol_factic_interstitial = NOTSET
 
   integer :: fracis_idx = -1
-  integer :: rprddp_idx          = -1
-  integer :: rprdsh_idx          = -1
-  integer :: nevapr_shcu_idx     = -1
-  integer :: nevapr_dpcu_idx     = -1
+
 
   logical :: wetdep_active = .false.
   integer :: nwetdep = 0
-  logical :: convproc_do_aer = .false.
+  logical :: convproc_do_aer = .false.   ! only read to stop the run if it is set (not supported)
+
   logical,allocatable :: aero_cnst_lq(:,:)
   integer,allocatable :: aero_cnst_id(:,:)
   logical, public, protected :: wetdep_lq(pcnst) ! set flags true for constituents with non-zero tendencies
@@ -72,9 +59,6 @@ module aero_wetdep_cam
   real(r8),allocatable :: scavimptblnum(:,:)
   real(r8),allocatable :: scavimptblvol(:,:)
 
-  integer :: nmodes=0
-  integer :: nbins=0
-  integer :: nspec_max=0
   integer :: nele_tot            ! total number of aerosol elements
   class(aerosol_properties), pointer :: aero_props=>null()
 
@@ -147,7 +131,7 @@ contains
        write(iulog,*) subname,' wetdep_active = ',wetdep_active,' nwetdep = ',nwetdep
     endif
 
-    call aero_convproc_readnl(nlfile)
+    !call aero_convproc_readnl(nlfile)
 
   end subroutine aero_wetdep_readnl
 
@@ -168,10 +152,6 @@ contains
     character(len=2) :: binstr
 
     fracis_idx = pbuf_get_index('FRACIS')
-    rprddp_idx      = pbuf_get_index('RPRDDP')
-    rprdsh_idx      = pbuf_get_index('RPRDSH')
-    nevapr_shcu_idx = pbuf_get_index('NEVAPR_SHCU')
-    nevapr_dpcu_idx = pbuf_get_index('NEVAPR_DPCU')
 
     if (.not.wetdep_active) return
 
@@ -179,38 +159,17 @@ contains
                       history_chemistry_out=history_chemistry, &
                       convproc_do_aer_out = convproc_do_aer)
 
-    call rad_cnst_get_info(0, nmodes=nmodes, nbins=nbins)
 
-    select case(aero_modelname)
-    case ('mam')
-    !if (nmodes>0) then
-       aero_props => modal_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props modal_aerosol_properties object failed')
-       end if
-    !else if (nbins>0) then
-    case ('carma')
-       aero_props => carma_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props carma_aerosol_properties object failed')
-       end if
-    !else
-    case ('fanci')
-       aero_props => fanci_aerosol_properties()
-       if (.not.associated(aero_props)) then
-          call endrun(subrname//' : construction of aero_props fanci_aerosol_properties object failed')
-       end if
-       if (convproc_do_aer) then
-   !     convproc_do_aer = .False.
-           call endrun(subrname// &
-                   ' : convproc_do_aer=.true. is not supported for the fanci scheme '// &
-                   '(aero_convproc assumes per-bin mass indexing; fanci carries mass per range). '// &
-                   'Set convproc_do_aer=.false.')
-       end if
-    !endif
-    case default
-        call endrun(subrname//' : cannot determine aerosol model')
-    end select
+    aero_props => fanci_aerosol_properties()
+    if (.not.associated(aero_props)) then
+        call endrun(subrname//' : construction of aero_props fanci_aerosol_properties object failed')
+    end if
+    if (convproc_do_aer) then
+        call endrun(subrname// &
+                ' : convproc_do_aer=.true. is not supported for the fanci scheme: '// &
+                   'unified convective processing (aero_convproc) is not implemented in FANCI. '// &
+                'Set convproc_do_aer=.false.')
+    end if
 
     nele_tot = aero_props%ncnst_tot()
 
@@ -258,8 +217,6 @@ contains
               call add_hist_fields(tmpname, unit_basename)
               call add_hist_fields(tmpname_cw, unit_basename)
 
-              call addfld( trim(tmpname_cw)//'RSPTD', (/ 'lev' /), 'A', unit_basename//'/kg/s',   &
-                       trim(tmpname_cw)//' resuspension tendency')
           end if
        end do
     end do
@@ -277,13 +234,9 @@ contains
 
     call wetdep_init()
 
-    nspec_max = maxval(aero_props%nspecies()) + 2
 
     call init_bcscavcoef()
 
-    if (convproc_do_aer) then
-       call aero_convproc_init(aero_props)
-    end if
 
   contains
 
@@ -310,16 +263,7 @@ if (masterproc) then
 
       call addfld (trim(name)//'SFSEC', &
               horiz_only,  'A',unit_basename//'/m2/s','Wet deposition flux (precip evap, convective) at surface')
-      if (convproc_do_aer) then
-         call addfld (trim(name)//'SFSES', &
-              horiz_only,  'A',unit_basename//'/m2/s','Wet deposition flux (precip evap, stratiform) at surface')
-         call addfld (trim(name)//'SFSBD', &
-              horiz_only,  'A',unit_basename//'/m2/s','Wet deposition flux (belowcloud, deep convective) at surface')
-         call addfld (trim(name)//'WETC',  &
-              (/ 'lev' /), 'A',unit_basename//'/kg/s ','wet deposition tendency')
-         call addfld (trim(name)//'CONU',  &
-              (/ 'lev' /), 'A',unit_basename//'/kg ','updraft mixing ratio')
-      end if
+
 
       call addfld (trim(name)//'WET',(/ 'lev' /), 'A',baseunits//'/kg/s ','wet deposition tendency')
       call addfld (trim(name)//'INS',(/ 'lev' /), 'A',baseunits//'/kg/s ','insol frac')
@@ -342,10 +286,7 @@ if (masterproc) then
          call add_default (trim(name)//'SFSIS', 1, ' ')
          call add_default (trim(name)//'SFSBC', 1, ' ')
          call add_default (trim(name)//'SFSBS', 1, ' ')
-         if (convproc_do_aer) then
-            call add_default (trim(name)//'SFSES', 1, ' ')
-            call add_default (trim(name)//'SFSBD', 1, ' ')
-         end if
+
       endif
 
     end subroutine add_hist_fields
@@ -362,483 +303,299 @@ if (masterproc) then
     type(physics_state), target, intent(in) :: state  ! Physics state variables
     real(r8),            intent(in)    :: dt          ! time step
     real(r8),            intent(in)    :: dlf(:,:)    ! shallow+deep convective detrainment [kg/kg/s]
-    type(cam_out_t),     intent(inout) :: cam_out     ! export state
+    type(cam_out_t),     intent(inout) :: cam_out     ! export state, gets the surface wet deposition fluxes
     type(physics_ptend), intent(out)   :: ptend       ! indivdual parameterization tendencies
-    type(physics_buffer_desc), pointer :: pbuf(:)
+    type(physics_buffer_desc), pointer :: pbuf(:)     ! physics buffer of this chunk
 
     character(len=*), parameter :: subrname = 'aero_wetdep_tend'
-    type(wetdep_inputs_t) :: dep_inputs
-    real(r8), pointer :: fracis(:,:,:)   ! fraction of transported species that are insoluble (pcols, pver, pcnst)
-    real(r8), target :: fracis_nadv(pcols,pver)  ! fraction of not-transported aerosols
+    type(wetdep_inputs_t) :: dep_inputs                !cloud and precipitation fields gathered by wetdep_inputs_set: cloud fractions, rain production, evaporation, precipitation areas
+    real(r8), pointer :: fracis(:,:,:)                 ! fraction of transported species that are not scavenged (pcols, pver, pcnst)
+    real(r8), target :: fracis_nadv(pcols,pver)        ! fraction of not-transported aerosols (cloud-borne)
 
     real(r8) :: scavcoefnv(pcols,pver,0:2) ! Dana and Hales coefficient (/mm) for
                                            ! cloud-borne num & vol (0),
                                            ! interstitial num (1), interstitial vol (2)
-    integer :: jnv ! index for scavcoefnv 3rd dimension
-    integer :: lphase ! index for interstitial / cloudborne aerosol
-    integer :: strt_loop, end_loop, stride_loop !loop indices for the lphase loop
 
-    real(r8) :: sol_factb(pcols, pver)
-    real(r8) :: sol_facti(pcols, pver)
-    real(r8) :: sol_factic(pcols,pver)
 
-    real(r8) :: dqdt_tmp(pcols,pver) ! temporary array to hold tendency for 1 species
-    real(r8) :: rcscavt(pcols, pver)
-    real(r8) :: rsscavt(pcols, pver)
-    real(r8) :: iscavt(pcols, pver)
-    real(r8) :: icscavt(pcols, pver)
-    real(r8) :: isscavt(pcols, pver)
-    real(r8) :: bcscavt(pcols, pver)
-    real(r8) :: bsscavt(pcols, pver)
+    real(r8) :: sol_factb(pcols, pver)    ! below-cloud solubility factor (fraction that can be captured)
 
-    real(r8) :: diam_wet(state%ncol, pver)
-    logical  :: isprx(pcols,pver) ! true if precipation
-    real(r8) :: prec(pcols) ! precipitation rate
 
-    real(r8) :: rtscavt(pcols, pver, 0:nspec_max)
+    real(r8) :: dqdt_tmp(pcols,pver)      ! temporary array to hold tendency of one tracer from one call
 
-    integer :: ncol, lchnk, m, ndx,mm, l
+    real(r8) :: iscavt(pcols, pver)       ! total in-cloud scavenging; an output that is never used afterwards
+    real(r8) :: icscavt(pcols, pver)      ! in-cloud scavenging: convective(diagnostics)
+    real(r8) :: isscavt(pcols, pver)      ! in-cloud scavenging: stratiform (diagnostics)
+    real(r8) :: bcscavt(pcols, pver)      ! below-cloud scavenging: convective(diagnostics)
+    real(r8) :: bsscavt(pcols, pver)      ! below-cloud scavenging: stratiform (diagnostics)
+
+    real(r8) :: diam_wet(state%ncol, pver)! wet diameter of the bin, which picks the impaction coefficient
+    logical  :: isprx(pcols,pver)         ! true where precipitation falls into the layer from above
+    real(r8) :: prec(pcols)               ! precipitation flux summed from the top down, used to set isprx
+
+    !real(r8) :: rtscavt(pcols, pver, 0:nspec_max) ! saved cloud-borne resuspension
+
+    integer :: ncol, lchnk, ndx, mm
     integer :: i,k
 
-    real(r8), pointer :: insolfr_ptr(:,:)
-    real(r8) :: q_tmp(pcols,pver) ! temporary array to hold "most current" mixing ratio for 1 species
-    logical :: cldbrn
+    real(r8) :: q_tmp(pcols,pver)         ! temporary array to hold "most current" mixing ratio for 1 species
 
-    type(ptr2d_t) :: raer(nele_tot)
-    type(ptr2d_t) :: qqcw(nele_tot)
+    type(ptr2d_t) :: raer(nele_tot)       !pointers to interstitial tracers (into state%q)
+    type(ptr2d_t) :: qqcw(nele_tot)       !pointers to cloud-borne tracers (in the state object)
 
-    real(r8) :: sflx(pcols)
-    character(len=aero_name_len) :: aname, cname, name
+    character(len=aero_name_len) :: aname, cname   ! interstitial / cloud-borne tracer name
 
-    real(r8) :: qqcw_in(pcols,pver), qqcw_sav(pcols,pver,0:nspec_max)
-    real(r8) :: f_act_conv(pcols,pver) ! prescribed aerosol activation fraction for convective cloud ! rce 2010/05/01
+    real(r8) :: qqcw_in(pcols,pver)       ! the cloud-borne amount that matches the interstitial tracer, passed as qqcw
+    real(r8) :: f_act_conv(pcols,pver) ! prescribed aerosol activation fraction for convective cloud
 
-    character(len=2) :: binstr
-    real(r8) :: aerdepwetcw(pcols,pcnst) ! aerosol wet deposition (cloud water)
-    real(r8) :: aerdepwetis(pcols,pcnst)  ! aerosol wet deposition (interstitial)
-    real(r8) :: dcondt_resusp3d(nele_tot,pcols,pver)
+    character(len=2) :: binstr            ! bin number as 2 characters, for SOLFACTB01…
+    real(r8) :: aerdepwetcw(pcols,pcnst)  ! aerosol surface wet deposition (cloud water) sent to cam_out
+    real(r8) :: aerdepwetis(pcols,pcnst)  ! aerosol surface wet deposition (interstitial) sent to cam_out
 
-    integer, parameter :: nsrflx_mzaer2cnvpr = 2
-    real(r8) :: qsrflx_mzaer2cnvpr(pcols,nele_tot,nsrflx_mzaer2cnvpr)
 
-    real(r8), pointer :: rprddp(:,:)     ! rain production, deep convection
-    real(r8), pointer :: rprdsh(:,:)     ! rain production, shallow convection
-    real(r8), pointer :: evapcdp(:,:)    ! Evaporation rate of deep    convective precipitation >=0.
-    real(r8), pointer :: evapcsh(:,:)    ! Evaporation rate of shallow convective precipitation >=0.
+    class(aerosol_state), pointer :: aero_state ! the FANCI master state for this chunk (via the abstract class)
+    type(fanci_aerosol_state), pointer :: fanci_aero_state ! same object, FANCI type (for FANCI-only methods)
+    ! FANCI interstitial mass (per-bin wet deposition summed onto the range)
+    type(fanci_aerosol_properties), pointer :: fanci_aero_props ! FANCI properties with the FANCI type, so nranges, range_bounds and so on are available
+    integer  :: ibin, irange, ispec, b1, b2    ! bin, range, species and first and last bin in range (b1,b2)
+    real(r8) :: bin_mmr_tot(pcols,pver)        ! total dry mass of one bin (kg/kg)
+    real(r8), allocatable :: bin_cw_mmr(:,:,:) ! (pcols,pver,nbins) cloud-borne mass of each bin, before any cloud-borne removal
+    real(r8) :: bin_fracis(pcols,pver)         ! fraction not scavenged, from the bin's mass call
+    real(r8) :: range_mmr(pcols,pver) !interstitial mass of the range, summed over species
+    real(r8) :: range_mmr_tend(pcols,pver)   ! mass tendency of the range, summed over bins
+    real(r8) :: range_fracis(pcols,pver), range_wsum(pcols,pver) !range_fracis: mass-weighted fraction not scavenged; range_wsum: sum of bin mass (its weight)
+    real(r8) :: massfrac(pcols,pver)           ! mass fraction of one species in the range
+    real(r8), pointer :: mmr_s(:,:)
+    real(r8) :: range_icscavt(pcols,pver), range_isscavt(pcols,pver)   ! diagnostics summed over bins
+    real(r8) :: range_bcscavt(pcols,pver), range_bsscavt(pcols,pver)
 
-    real(r8) :: rprddpsum(pcols)
-    real(r8) :: rprdshsum(pcols)
-    real(r8) :: evapcdpsum(pcols)
-    real(r8) :: evapcshsum(pcols)
-
-    real(r8) :: tmp_resudp, tmp_resush
-    real(r8) :: tmpa, tmpb
-    real(r8) :: sflxec(pcols), sflxecdp(pcols)  ! deposition flux
-    real(r8) :: sflxic(pcols), sflxicdp(pcols)  ! deposition flux
-    real(r8) :: sflxbc(pcols), sflxbcdp(pcols)  ! deposition flux
-
-    class(aerosol_state), pointer :: aero_state
-
+    nullify(fanci_aero_props)
     nullify(aero_state)
+    nullify(fanci_aero_state)
 
     if (.not.wetdep_active) return
 
-    dcondt_resusp3d(:,:,:) = 0._r8
 
-    select case(aero_modelname)
-    !if (nmodes>0) then
-    case ('mam')
-       aero_state => modal_aerosol_state(state,pbuf)
-       if (.not.associated(aero_state)) then
-          call endrun(subrname//' : construction of aero_state modal_aerosol_state object failed')
-       end if
-    !else if (nbins>0) then
-    case ('carma')
-       aero_state => carma_aerosol_state(state,pbuf)
-       if (.not.associated(aero_state)) then
-          call endrun(subrname//' : construction of aero_state carma_aerosol_state object failed')
-       end if
-    case ('fanci')
-        aero_props => fanci_aerosol_properties()
-        aero_state => fanci_aerosol_state(state, pbuf)
-    case default
-    !else
-       call endrun(subrname//' : cannot determine aerosol model')
-    !endif
-    end select
+    aero_props => fanci_aerosol_properties()
+    fanci_aero_state => fanci_aerosol_state(state, pbuf)
+    aero_state       => fanci_aero_state
 
     lchnk = state%lchnk
     ncol = state%ncol
-
+   ! TODO: remove cam dependency, initialises ptend
     call physics_ptend_init(ptend, state%psetcols, subrname, lq=wetdep_lq)
-
+   ! TODO: remove cam dependency. This code gets input for wet deposition from host model
     call wetdep_inputs_set( state, pbuf, dep_inputs )
-
+   ! TODO: remove cam dependecy. This is fraction not scavenged, per constituent; read later by e.g. deep convection
     call pbuf_get_field(pbuf, fracis_idx, fracis)
-
+   ! Gets the interstitial (raer) and cloud borne (qqcw) aerosols
     call aero_state%get_states( aero_props, raer, qqcw )
+   
 
-    qsrflx_mzaer2cnvpr(:,:,:) = 0.0_r8
+    ! initialises aerosol surface wet deposition (interstitial and cloud borne)
     aerdepwetis(:,:) = 0.0_r8
     aerdepwetcw(:,:) = 0.0_r8
 
-    if (convproc_do_aer) then
-       !Do cloudborne first for unified convection scheme so that the resuspension of cloudborne
-       !can be saved then applied to interstitial
-       strt_loop   =  2
-       end_loop    =  1
-       stride_loop = -1
-    else
-       ! Counters for "without" unified convective treatment (i.e. default case)
-       strt_loop   = 1
-       end_loop    = 2
-       stride_loop = 1
-    endif
-
+   ! Calculating summed precipitation from top down.
     prec(:ncol)=0._r8
     do k=1,pver
        where (prec(:ncol) >= 1.e-7_r8)
-          isprx(:ncol,k) = .true.
+          isprx(:ncol,k) = .true. ! there is precip
        elsewhere
-          isprx(:ncol,k) = .false.
+          isprx(:ncol,k) = .false.  ! there is not precip
        endwhere
        prec(:ncol) = prec(:ncol) + (dep_inputs%prain(:ncol,k) + dep_inputs%cmfdqr(:ncol,k) - dep_inputs%evapr(:ncol,k)) &
                     *state%pdel(:ncol,k)/gravit
     end do
 
-    f_act_conv = 0._r8
-    scavcoefnv = nan
-    qqcw_sav = nan
+    f_act_conv = 0._r8 ! Initializing prescribed aerosol activation fraction for convective cloud 
+    scavcoefnv = nan    ! initializing Dana and Hales coefficient (/mm) for cloud-borne num & vol (0), interstitial num (1), interstitial vol (2)
 
-    if (convproc_do_aer) then
 
-       call t_startf('aero_convproc')
-       call aero_convproc_intr( aero_props, aero_state, state, ptend, pbuf, dt, &
-            nsrflx_mzaer2cnvpr, qsrflx_mzaer2cnvpr, aerdepwetis, dcondt_resusp3d )
+    ! Unified convective processing (convproc_do_aer) is not implemented for FANCI;
+    ! aero_wetdep_init stops if it is set. See the note at the top of this module.
 
-       if (convproc_do_evaprain_atonce) then
 
-          do m = 1,aero_props%nbins()
-             do l = 0,aero_props%nspecies(m)
-                mm = aero_props%indexer(m,l)
 
-                if (l == 0) then   ! number
-                   call aero_props%num_names(m, aname, cname)
-                else
-                   call aero_props%mmr_names(m,l, aname, cname)
-                end if
+    ! FANCI wet deposition: a loop over ranges, and over the bins of each range.
+    !   bin_loop (each bin, with the bin's own size, coefficients and factors):
+    !     1. interstitial number                     -> ptend
+    !     2. interstitial total dry mass of the bin  -> summed onto the range
+    !     3. cloud-borne number                      -> in place (state object)
+    !   species loop (each species of the range):
+    !     4. interstitial mass: range tendency split by mass fraction -> ptend
+    !     5. cloud-borne mass (does not depend on size)               -> in place
+    ! The interstitial calls see cloud-borne amounts from before any cloud-borne removal:
+    ! bin_cw_mmr is computed for all bins first, and a bin's cloud-borne number is removed
+    ! only after that bin's interstitial calls.
 
-                call outfld( trim(cname)//'RSPTD', dcondt_resusp3d(mm,:ncol,:), ncol, lchnk )
+    ! The solubility factors for each phase are set in scavenge (see contains below).
+    fanci_aero_props => fanci_aerosol_properties()
 
-                do k = 1,pver
-                   do i = 1,ncol
-                      qqcw(mm)%fld(i,k) = max(0._r8, qqcw(mm)%fld(i,k) + dcondt_resusp3d(mm,i,k)*dt)
-                   end do
+
+    ! cloud-borne mass of each bin (its share of the range's cloud-borne mass).
+    ! Computed for all bins BEFORE any cloud-borne removal: cldbrne_total_bin_mmr
+    ! sums the cloud-borne number of all bins in the range.
+    allocate(bin_cw_mmr(pcols, pver, aero_props%nbins()))
+    bin_cw_mmr = 0._r8
+    do ibin = 1, aero_props%nbins()
+        do k = 1, pver
+            do i = 1, ncol
+                bin_cw_mmr(i,k,ibin) = fanci_aero_state%cldbrne_total_bin_mmr(aero_props, ibin, i, k)
+            end do
+        end do
+    end do
+
+    range_loop: do irange = 1, fanci_aero_props%nranges()
+
+        b1 = fanci_aero_props%range_bounds(irange,1)   ! leader bin: owns the mass tracers
+        b2 = fanci_aero_props%range_bounds(irange,2)
+
+        ! range totals; the mass tracers live on the leader bin
+        range_mmr    = 0._r8
+        do ispec = 1, fanci_aero_props%range_nspecies(irange)
+            call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
+            range_mmr(:ncol,:) = range_mmr(:ncol,:) + mmr_s(:ncol,:)
+        end do
+
+
+        range_mmr_tend = 0._r8
+        range_fracis   = 0._r8
+        range_wsum     = 0._r8
+        range_icscavt  = 0._r8
+        range_isscavt  = 0._r8
+        range_bcscavt  = 0._r8
+        range_bsscavt  = 0._r8
+
+        bin_loop: do ibin = b1, b2
+            !this bin's own total dry mass
+            do k = 1, pver
+                do i = 1, ncol
+                    bin_mmr_tot(i,k) = aero_state%ambient_total_bin_mmr(aero_props, ibin, i, k)
                 end do
+            end do
+            ! this bin's own size, coefficients and factors (used for both number and mass)
+            diam_wet = aero_state%wet_diameter(ibin, ncol, pver)
+            scavcoefnv = 0.0_r8
+            ! below cloud impaction scavenging coefs:
+            ! get scav coef for interstitial number and volume, index 0 (cloud-borne) stays 0 (cloud borne aerosols are not below cloud scavenged)
+            call get_bcscavcoefs( ibin, ncol, isprx, diam_wet, scavcoefnv(:,:,1), scavcoefnv(:,:,2) )
 
-             end do
-          end do
-       end if
-       call t_stopf('aero_convproc')
+            ! below-cloud solubility factor (fraction that can be captured)
+            if ( sol_factb_interstitial /= NOTSET ) then
+                sol_factb(:ncol,:) = sol_factb_interstitial
+            else
+                sol_factb(:ncol,:) = aero_state%sol_factb_interstitial( ibin, ncol, pver, aero_props )
+            end if
+            write(binstr,'(i2.2)') ibin
+            call outfld('SOLFACTB'//binstr, sol_factb, pcols, lchnk)
+            !fraction activated in convective cloud
+            f_act_conv(:ncol,:) = aero_state%convcld_actfrac( ibin, 1, ncol, pver )
 
-    end if
+            ! interstitial NUMBER of this bin: same size, coefficients and factors as the
+            ! mass call below, but with the number impaction coefficient (scavcoefnv(:,:,1))
+            ndx = aero_cnst_id(ibin, 0)
+            if (ndx > 0) then
+                mm = aero_props%indexer(ibin, 0)  ! index 0 is number
+                call aero_props%num_names( ibin, aname, cname )
+                q_tmp(:ncol,:)   = raer(mm)%fld(:ncol,:) + ptend%q(:ncol,:,ndx)*dt  ! most current number
+                qqcw_in(:ncol,:) = qqcw(mm)%fld(:ncol,:)                            ! matching cloud-borne number
+               ! Also fills icscavt, isscavt, bcscavt and bsscavt (declared in aero_wetdep_tend):
+                call scavenge( .false., &                   ! .true. for stratiform cloud-borne aerosol
+                              q_tmp, qqcw_in, &             ! number (#/kg) or mass (kg/kg) + equivalent for cloud-borne
+                              scavcoefnv(:,:,1), &          ! scavenging coefficient for below-cloud impaction, here for number
+                              sol_factb, f_act_conv, &      ! solubility factors below cloud, activation factor convective
+                              dqdt_tmp, &                   ! tendency of tracer (out)
+                              fracis(:,:,ndx) )             ! fraction not scavenged (out)
+                ptend%q(:ncol,:,ndx) = ptend%q(:ncol,:,ndx) + dqdt_tmp(:ncol,:)
+                call wetdep_output( aname, ndx, .false., dqdt_tmp, icscavt, isscavt, bcscavt, bsscavt, &
+                                    fracis(:,:,ndx) )
+            end if
 
-    bins_loop: do m = 1,aero_props%nbins()
+            ! interstitial MASS of this bin (total dry mass, volume impaction coefficient).
+            ! wetdepa_v2 goes through the column from the top and follows the convective and
+            ! stratiform precipitation and the tracer it carries; where rain evaporates, the
+            ! same fraction of the carried tracer is released. Four processes: in-cloud and
+            ! below-cloud, convective and stratiform.
+            ! Also fills icscavt, isscavt, bcscavt and bsscavt (declared in aero_wetdep_tend):
+            call scavenge( .false., &             ! not cloud-borne
+                    bin_mmr_tot, &                ! bin mass mmr
+                    bin_cw_mmr(:,:,ibin), &       ! its cloud-borne mass
+                    scavcoefnv(:,:,2), &          ! volume (mass) impaction coefficient
+                    sol_factb, f_act_conv, &
+                    dqdt_tmp, bin_fracis )        ! outputs
 
-       phase_loop: do lphase = strt_loop,end_loop, stride_loop ! loop over interstitial (1) and cloud-borne (2) forms
+            ! add up the bins of the range
+            range_mmr_tend(:ncol,:) = range_mmr_tend(:ncol,:) + dqdt_tmp(:ncol,:)
+            range_fracis(:ncol,:)   = range_fracis(:ncol,:) + bin_fracis(:ncol,:)*bin_mmr_tot(:ncol,:)
+            range_wsum(:ncol,:)     = range_wsum(:ncol,:)   + bin_mmr_tot(:ncol,:)
+            range_icscavt(:ncol,:)  = range_icscavt(:ncol,:) + icscavt(:ncol,:)
+            range_isscavt(:ncol,:)  = range_isscavt(:ncol,:) + isscavt(:ncol,:)
+            range_bcscavt(:ncol,:)  = range_bcscavt(:ncol,:) + bcscavt(:ncol,:)
+            range_bsscavt(:ncol,:)  = range_bsscavt(:ncol,:) + bsscavt(:ncol,:)
 
-          cldbrn = lphase==2
+            ! cloud-borne NUMBER of this bin (stratiform in-cloud only; does not depend on size).
+            ! Done last for this bin: the interstitial calls above must see the cloud-borne (to determine clear air aerosol)
+            ! number from before removal. Applied in place to the state object.
+            if (ndx > 0) then
+                q_tmp(:ncol,:) = qqcw(mm)%fld(:ncol,:)          ! copy: fld is (ncol,pver)
+                ! Also fills icscavt, isscavt, bcscavt and bsscavt (declared in aero_wetdep_tend):
+                call scavenge( .true., q_tmp, q_tmp, &          ! tracer_cw not used for cloud-borne
+                               scavcoefnv(:,:,0), &             ! 0: no below-cloud for cloud-borne
+                               sol_factb, f_act_conv, &         ! not used for cloud-borne
+                               dqdt_tmp, fracis_nadv )
+                call update_cldbrne( qqcw(mm)%fld, dqdt_tmp )   ! clip at zero and apply
+                call wetdep_output( cname, ndx, .true., dqdt_tmp, icscavt, isscavt, bcscavt, bsscavt, &
+                                    fracis_nadv )
+            end if
+        end do bin_loop
 
-          sol_factb = nan
-          sol_facti = nan
-          sol_factic = nan
+        ! mass weighted fraction not scavenged (used by convective transport)
+        where (range_wsum(:ncol,:) > 0._r8)
+            range_fracis(:ncol,:) = range_fracis(:ncol,:)/range_wsum(:ncol,:)
+        elsewhere
+            range_fracis(:ncol,:) = 1._r8
+        end where
 
-          if (lphase == 1) then ! interstial aerosol
+        ! split the range tendency over the species and apply it
+        do ispec = 1, fanci_aero_props%range_nspecies(irange)
 
-             sol_facti = 0.0_r8 ! strat in-cloud scav totally OFF for institial
+            ndx = aero_cnst_id(b1, ispec)
+            if (ndx < 1) cycle
 
-             sol_factic = sol_factic_interstitial
+            call aero_state%get_ambient_mmr(ispec, b1, mmr_s)
+            massfrac = 0._r8
+            where (range_mmr(:ncol,:) > 0._r8) &
+                    massfrac(:ncol,:) = mmr_s(:ncol,:)/range_mmr(:ncol,:)
 
-          else ! cloud-borne aerosol (borne by stratiform cloud drops)
+            dqdt_tmp(:ncol,:)    = range_mmr_tend(:ncol,:)*massfrac(:ncol,:)
+            ptend%q(:ncol,:,ndx) = ptend%q(:ncol,:,ndx) + dqdt_tmp(:ncol,:)
+            fracis(:ncol,:,ndx)  = range_fracis(:ncol,:)
 
-             sol_factb  = 0.0_r8   ! all below-cloud scav OFF (anything cloud-borne is located "in-cloud")
-             sol_facti  = sol_facti_cloud_borne   ! strat  in-cloud scav cloud-borne tuning factor
-             sol_factic = 0.0_r8   ! conv   in-cloud scav OFF (having this on would mean
-             !        that conv precip collects strat droplets)
-             f_act_conv = 0.0_r8   ! conv   in-cloud scav OFF (having this on would mean
+            call aero_props%mmr_names( b1, ispec, aname, cname)
 
-          end if
-          if (convproc_do_aer .and. lphase == 1) then
-             ! if modal aero convproc is turned on for aerosols, then
-             !    turn off the convective in-cloud removal for interstitial aerosols
-             !    (but leave the below-cloud on, as convproc only does in-cloud)
-             !    and turn off the outfld SFWET, SFSIC, SFSID, SFSEC, and SFSED calls
-             ! for (stratiform)-cloudborne aerosols, convective wet removal
-             !    (all forms) is zero, so no action is needed
-             sol_factic = 0.0_r8
-          endif
+            call wetdep_output( aname, ndx, .false., dqdt_tmp,       &
+                    range_icscavt*massfrac, range_isscavt*massfrac,  &
+                    range_bcscavt*massfrac, range_bsscavt*massfrac, range_fracis )
+            ! cloud-borne MASS of this species (stratiform in-cloud only). Removal does not
+            ! depend on size, so it is done once per species on the range, not per bin.
+            ! Applied in place to the state object.
+            mm = aero_props%indexer(b1, ispec)              ! position in raer/qqcw of this species
+            q_tmp(:ncol,:) = qqcw(mm)%fld(:ncol,:)          ! copy: fld is (ncol,pver)
+            ! Also fills icscavt, isscavt, bcscavt and bsscavt (declared in aero_wetdep_tend):
+            call scavenge( .true.,     &           ! cloud borne true
+                           q_tmp,      &           ! tracer mass
+                           q_tmp,      &           ! tracer_cw not used for cloud-borne
+                           scavcoefnv(:,:,0), &             ! 0: no below-cloud for cloud-borne
+                           sol_factb, f_act_conv, &         ! not used for cloud-borne
+                           dqdt_tmp, fracis_nadv )          ! outputs
+            call update_cldbrne( qqcw(mm)%fld, dqdt_tmp )   ! clip at zero and apply
+            call wetdep_output( cname, ndx, .true., dqdt_tmp, icscavt, isscavt, bcscavt, bsscavt, &
+                                fracis_nadv )
 
-          diam_wet = aero_state%wet_diameter(m,ncol,pver)
+        end do ! species loop
+    end do range_loop
+    deallocate(bin_cw_mmr)
 
-          scavcoefnv = 0.0_r8
-
-          if (lphase == 1) then ! interstial aerosol
-             call get_bcscavcoefs( m, ncol, isprx, diam_wet, scavcoefnv(:,:,1), scavcoefnv(:,:,2) )
-
-             if ( sol_factb_interstitial /= NOTSET ) then
-                sol_factb(:ncol,:) = sol_factb_interstitial ! all below-cloud scav
-             else
-                sol_factb(:ncol,:) = aero_state%sol_factb_interstitial( m, ncol, pver, aero_props )
-             end if
-
-             write(binstr,'(i2.2)') m
-             call outfld('SOLFACTB'//binstr,sol_factb, pcols, lchnk)
-
-          end if
-
-          elem_loop: do l = 0,aero_props%nspecies(m)
-
-             ndx = aero_cnst_id(m,l)
-             if (ndx<1) cycle elem_loop
-
-             if (.not. cldbrn .and. ndx>0) then
-                insolfr_ptr => fracis(:,:,ndx)
-             else
-                insolfr_ptr => fracis_nadv
-             endif
-
-             mm = aero_props%indexer(m,l)
-
-             if (l == 0) then   ! number
-                call aero_props%num_names( m, aname, cname)
-             else
-                call aero_props%mmr_names( m,l, aname, cname)
-             end if
-
-             if (cldbrn) then
-                q_tmp(1:ncol,:) = qqcw(mm)%fld(1:ncol,:)
-                jnv = 0
-                if (convproc_do_aer) then
-                   qqcw_sav(:ncol,:,l) = q_tmp(1:ncol,:)
-                endif
-                name = cname
-                qqcw_in = nan
-                f_act_conv = nan
-             else ! interstial aerosol
-                q_tmp(1:ncol,:) = raer(mm)%fld(1:ncol,:) + ptend%q(1:ncol,:,ndx)*dt
-                if (l==0) then
-                   jnv = 1
-                else
-                   jnv = 2
-                end if
-                if(convproc_do_aer) then
-                   !Feed in the saved cloudborne mixing ratios from phase 2
-                   qqcw_in(:ncol,:) = qqcw_sav(:ncol,:,l)
-                else
-                   qqcw_in(:ncol,:) = qqcw(mm)%fld(:ncol,:)
-                end if
-
-                f_act_conv(:ncol,:) = aero_state%convcld_actfrac( m, l, ncol, pver)
-                name = aname
-             end if
-
-             dqdt_tmp(1:ncol,:) = 0.0_r8
-
-             call wetdepa_v2(state%pmid, state%q(:,:,1), state%pdel, &
-                  dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
-                  dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
-                  dep_inputs%evapr, dep_inputs%totcond, q_tmp, dt, &
-                  dqdt_tmp, iscavt, dep_inputs%cldvcu, dep_inputs%cldvst, &
-                  dlf, insolfr_ptr, sol_factb, ncol, &
-                  scavcoefnv(:,:,jnv), &
-                  is_strat_cloudborne=cldbrn, &
-                  qqcw=qqcw_in(:,:), f_act_conv=f_act_conv, &
-                  icscavt=icscavt, isscavt=isscavt, bcscavt=bcscavt, bsscavt=bsscavt, &
-                  convproc_do_aer=convproc_do_aer, rcscavt=rcscavt, rsscavt=rsscavt,  &
-                  sol_facti_in=sol_facti, sol_factic_in=sol_factic, &
-                  convproc_do_evaprain_atonce_in=convproc_do_evaprain_atonce, &
-                  bergso_in=dep_inputs%bergso )
-
-             if(convproc_do_aer) then
-                if(cldbrn) then
-                   ! save resuspension of cloudborne species
-                   rtscavt(1:ncol,:,l) = rcscavt(1:ncol,:) + rsscavt(1:ncol,:)
-                   ! wetdepa_v2 adds the resuspension of cloudborne to the dqdt of cloudborne (as a source)
-                   ! undo this, so the resuspension of cloudborne can be added to the dqdt of interstitial (above)
-                   dqdt_tmp(1:ncol,:) = dqdt_tmp(1:ncol,:) - rtscavt(1:ncol,:,l)
-                else
-                   ! add resuspension of cloudborne species to dqdt of interstitial species
-                   dqdt_tmp(1:ncol,:) = dqdt_tmp(1:ncol,:) + rtscavt(1:ncol,:,l)
-                end if
-             endif
-
-             if (cldbrn) then
-                do k = 1,pver
-                   do i = 1,ncol
-                      if ( (qqcw(mm)%fld(i,k) + dqdt_tmp(i,k) * dt) .lt. 0.0_r8 )   then
-                         dqdt_tmp(i,k) = - qqcw(mm)%fld(i,k) / dt
-                      end if
-                   end do
-                end do
-
-                qqcw(mm)%fld(1:ncol,:) = qqcw(mm)%fld(1:ncol,:) + dqdt_tmp(1:ncol,:) * dt
-
-             else
-                ptend%q(1:ncol,:,ndx) = ptend%q(1:ncol,:,ndx) + dqdt_tmp(1:ncol,:)
-             end if
-
-             call outfld( trim(name)//'WET', dqdt_tmp(:,:), pcols, lchnk)
-             call outfld( trim(name)//'SIC', icscavt, pcols, lchnk)
-             call outfld( trim(name)//'SIS', isscavt, pcols, lchnk)
-             call outfld( trim(name)//'SBC', bcscavt, pcols, lchnk)
-             call outfld( trim(name)//'SBS', bsscavt, pcols, lchnk)
-
-             call outfld( trim(name)//'INS', insolfr_ptr, pcols, lchnk)
-
-             sflx(:)=0._r8
-             do k=1,pver
-                do i=1,ncol
-                   sflx(i)=sflx(i)+dqdt_tmp(i,k)*state%pdel(i,k)/gravit
-                enddo
-             enddo
-             if (cldbrn) then
-                call outfld( trim(name)//'SFWET', sflx, pcols, lchnk)
-                if (ndx>0) aerdepwetcw(:ncol,ndx) = sflx(:ncol)
-             else
-                if (ndx>0) aerdepwetis(:ncol,ndx) = aerdepwetis(:ncol,ndx) + sflx(:ncol)
-                call outfld( trim(name)//'SFWET', aerdepwetis(:ncol,ndx), ncol, lchnk)
-             end if
-
-             sflx(:)=0._r8
-             do k=1,pver
-                do i=1,ncol
-                   sflx(i)=sflx(i)+icscavt(i,k)*state%pdel(i,k)/gravit
-                enddo
-             enddo
-             if (cldbrn) then
-                call outfld( trim(name)//'SFSIC', sflx, pcols, lchnk)
-             else
-                if (.not.convproc_do_aer) call outfld( trim(name)//'SFSIC', sflx, pcols, lchnk)
-                if (convproc_do_aer) sflxic = sflx
-             end if
-
-             sflx(:)=0._r8
-             do k=1,pver
-                do i=1,ncol
-                   sflx(i)=sflx(i)+isscavt(i,k)*state%pdel(i,k)/gravit
-                enddo
-             enddo
-             call outfld( trim(name)//'SFSIS', sflx, pcols, lchnk)
-
-             sflx(:)=0._r8
-             do k=1,pver
-                do i=1,ncol
-                   sflx(i)=sflx(i)+bcscavt(i,k)*state%pdel(i,k)/gravit
-                enddo
-             enddo
-             call outfld( trim(name)//'SFSBC', sflx, pcols, lchnk)
-             if (convproc_do_aer) sflxbc = sflx
-
-             sflx(:)=0._r8
-             do k=1,pver
-                do i=1,ncol
-                   sflx(i)=sflx(i)+bsscavt(i,k)*state%pdel(i,k)/gravit
-                enddo
-             enddo
-             call outfld( trim(name)//'SFSBS', sflx, pcols, lchnk)
-
-             if(convproc_do_aer) then
-
-                sflx(:)=0.0_r8
-                do k=1,pver
-                   do i=1,ncol
-                      sflx(i)=sflx(i)+rsscavt(i,k)*state%pdel(i,k)/gravit
-                   enddo
-                enddo
-                call outfld( trim(name)//'SFSES', sflx, pcols, lchnk)
-
-                sflx(:)=0._r8
-                do k=1,pver
-                   do i=1,ncol
-                      sflx(i)=sflx(i)+rcscavt(i,k)*state%pdel(i,k)/gravit
-                   enddo
-                enddo
-                if (.not.convproc_do_aer) call outfld( trim(name)//'SFSEC', sflx, pcols, lchnk)
-                sflxec = sflx
-
-                if(.not.cldbrn) then
-
-                   ! apportion convective surface fluxes to deep and shallow conv
-                   ! this could be done more accurately in subr wetdepa
-                   ! since deep and shallow rarely occur simultaneously, and these
-                   !    fields are just diagnostics, this approximate method is adequate
-                   ! only do this for interstitial aerosol, because conv clouds to not
-                   !    affect the stratiform-cloudborne aerosol
-                   if ( deepconv_wetdep_history) then
-
-                      call pbuf_get_field(pbuf, rprddp_idx,      rprddp  )
-                      call pbuf_get_field(pbuf, rprdsh_idx,      rprdsh  )
-                      call pbuf_get_field(pbuf, nevapr_dpcu_idx, evapcdp )
-                      call pbuf_get_field(pbuf, nevapr_shcu_idx, evapcsh )
-
-                      rprddpsum(:)  = 0.0_r8
-                      rprdshsum(:)  = 0.0_r8
-                      evapcdpsum(:) = 0.0_r8
-                      evapcshsum(:) = 0.0_r8
-
-                      do k = 1, pver
-                         rprddpsum(:ncol)  = rprddpsum(:ncol)  +  rprddp(:ncol,k)*state%pdel(:ncol,k)/gravit
-                         rprdshsum(:ncol)  = rprdshsum(:ncol)  +  rprdsh(:ncol,k)*state%pdel(:ncol,k)/gravit
-                         evapcdpsum(:ncol) = evapcdpsum(:ncol) + evapcdp(:ncol,k)*state%pdel(:ncol,k)/gravit
-                         evapcshsum(:ncol) = evapcshsum(:ncol) + evapcsh(:ncol,k)*state%pdel(:ncol,k)/gravit
-                      end do
-
-                      do i = 1, ncol
-                         rprddpsum(i)  = max( rprddpsum(i),  1.0e-35_r8 )
-                         rprdshsum(i)  = max( rprdshsum(i),  1.0e-35_r8 )
-                         evapcdpsum(i) = max( evapcdpsum(i), 0.1e-35_r8 )
-                         evapcshsum(i) = max( evapcshsum(i), 0.1e-35_r8 )
-
-                         ! assume that in- and below-cloud removal are proportional to column precip production
-                         tmpa = rprddpsum(i) / (rprddpsum(i) + rprdshsum(i))
-                         tmpa = max( 0.0_r8, min( 1.0_r8, tmpa ) )
-                         sflxicdp(i) = sflxic(i)*tmpa
-                         sflxbcdp(i) = sflxbc(i)*tmpa
-
-                         ! assume that resuspension is proportional to (wet removal)*[(precip evap)/(precip production)]
-                         tmp_resudp =           tmpa  * min( (evapcdpsum(i)/rprddpsum(i)), 1.0_r8 )
-                         tmp_resush = (1.0_r8 - tmpa) * min( (evapcshsum(i)/rprdshsum(i)), 1.0_r8 )
-                         tmpb = max( tmp_resudp, 1.0e-35_r8 ) / max( (tmp_resudp+tmp_resush), 1.0e-35_r8 )
-                         tmpb = max( 0.0_r8, min( 1.0_r8, tmpb ) )
-                         sflxecdp(i) = sflxec(i)*tmpb
-                      end do
-                      call outfld( trim(name)//'SFSBD', sflxbcdp, pcols, lchnk)
-                   else
-                      sflxec(1:ncol)   = 0.0_r8
-                      sflxecdp(1:ncol) = 0.0_r8
-                   end if
-
-                   ! when ma_convproc_intr is used, convective in-cloud wet removal is done there
-                   ! the convective (total and deep) precip-evap-resuspension includes in- and below-cloud
-                   ! contributions
-                   ! so pass the below-cloud contribution to ma_convproc_intr
-                   qsrflx_mzaer2cnvpr(1:ncol,mm,1) = sflxec(  1:ncol)
-                   qsrflx_mzaer2cnvpr(1:ncol,mm,2) = sflxecdp(1:ncol)
-
-                end if
-             end if
-
-          end do elem_loop
-       end do phase_loop
-
-    end do bins_loop
-
-    if (.not. aero_modelname=='fanci') then
-        if (associated(aero_state)) then
-            deallocate(aero_state)
-            nullify(aero_state)
-        end if
-    end if
 
     ! if the user has specified prescribed aerosol dep fluxes then
     ! do not set cam_out dep fluxes according to the prognostic aerosols
@@ -847,65 +604,173 @@ if (masterproc) then
     endif
 
   contains
+        ! one wetdepa_v2 call; solubility factors set from the phase
+        ! Also fills icscavt, isscavt, bcscavt and bsscavt (declared in aero_wetdep_tend).
+        subroutine scavenge( cldbrn, tracer, tracer_cw, scavcoef, sfb_bin, factconv_bin, dqdt, insol )
 
-    ! below cloud impaction scavenging coefs
-    subroutine get_bcscavcoefs( m, ncol, isprx, diam_wet, scavcoefnum, scavcoefvol )
+            logical,  intent(in)  :: cldbrn                   ! .true. for stratiform cloud-borne aerosol
+            real(r8), intent(in)  :: tracer(pcols,pver)       ! number (#/kg) or mass (kg/kg)
+            real(r8), intent(in)  :: tracer_cw(pcols,pver)    ! matching cloud-borne amount (used only for interstitial calls)
+            real(r8), intent(in)  :: scavcoef(pcols,pver)     ! below-cloud impaction coefficient
+            real(r8), intent(in)  :: sfb_bin(pcols,pver)      ! below-cloud solubility factor of the bin
+            real(r8), intent(in)  :: factconv_bin(pcols,pver) ! convective activation fraction of the bin
+            real(r8), intent(out) :: dqdt(pcols,pver)         ! tendency of tracer
+            real(r8), intent(out) :: insol(pcols,pver)        ! fraction not scavenged
 
-      integer,intent(in) :: m, ncol
-      logical,intent(in):: isprx(:,:)
-      real(r8), intent(in) :: diam_wet(:,:)
-      real(r8), intent(out) :: scavcoefnum(:,:), scavcoefvol(:,:)
+            real(r8) :: sfb(pcols,pver), sfi(pcols,pver), sfic(pcols,pver), fac(pcols,pver)
 
-      integer i, k, jgrow
-      real(r8) dumdgratio, xgrow, dumfhi, dumflo, scavimpvol, scavimpnum
-
-      do k = 1, pver
-         do i = 1, ncol
-
-            ! do only if no precip
-            if ( isprx(i,k) .and. diam_wet(i,k)>0.0_r8) then
-               !
-               ! interpolate table values using log of (actual-wet-size)/(base-dry-size)
-
-               dumdgratio = diam_wet(i,k)/aero_props%scav_diam(m)
-               if ((dumdgratio >= 0.99_r8) .and. (dumdgratio <= 1.01_r8)) then
-                  scavimpvol = scavimptblvol(0,m)
-                  scavimpnum = scavimptblnum(0,m)
-               else
-                  xgrow = log( dumdgratio ) / dlndg_nimptblgrow
-                  jgrow = int( xgrow )
-                  if (xgrow < 0._r8) jgrow = jgrow - 1
-                  if (jgrow < nimptblgrow_mind) then
-                     jgrow = nimptblgrow_mind
-                     xgrow = jgrow
-                  else
-                     jgrow = min( jgrow, nimptblgrow_maxd-1 )
-                  end if
-
-                  dumfhi = xgrow - jgrow
-                  dumflo = 1._r8 - dumfhi
-
-                  scavimpvol = dumflo*scavimptblvol(jgrow,m) + &
-                               dumfhi*scavimptblvol(jgrow+1,m)
-                  scavimpnum = dumflo*scavimptblnum(jgrow,m) + &
-                               dumfhi*scavimptblnum(jgrow+1,m)
-
-               end if
-
-               ! impaction scavenging removal amount for volume
-               scavcoefvol(i,k) = exp( scavimpvol )
-               ! impaction scavenging removal amount to number
-               scavcoefnum(i,k) = exp( scavimpnum )
-
+            if ( cldbrn ) then
+                sfb  = 0._r8                     ! no below-cloud: cloud-borne is in cloud
+                sfi  = sol_facti_cloud_borne     ! stratiform in-cloud
+                sfic = 0._r8                     ! no convective in-cloud
+                fac  = 0._r8
             else
-               scavcoefvol(i,k) = 0._r8
-               scavcoefnum(i,k) = 0._r8
+                sfb  = sfb_bin
+                sfi  = 0._r8                     ! no stratiform in-cloud: activated aerosol is cloud-borne
+                sfic = sol_factic_interstitial
+                fac  = factconv_bin
             end if
 
-         end do
-      end do
+            dqdt(:ncol,:) = 0._r8
 
-    end subroutine get_bcscavcoefs
+            call wetdepa_v2(state%pmid, state%q(:,:,1), state%pdel, &
+                    dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
+                    dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
+                    dep_inputs%evapr, dep_inputs%totcond, tracer, dt, &
+                    dqdt, iscavt, dep_inputs%cldvcu, dep_inputs%cldvst, &
+                    dlf, insol, sfb, ncol, scavcoef, &
+                    is_strat_cloudborne=cldbrn, qqcw=tracer_cw, f_act_conv=fac, &
+                    icscavt=icscavt, isscavt=isscavt, bcscavt=bcscavt, bsscavt=bsscavt, &
+                    sol_facti_in=sfi, sol_factic_in=sfic )
+            ! Not passed (convproc only, not implemented for FANCI): convproc_do_aer, rcscavt,
+            ! rsscavt, convproc_do_evaprain_atonce_in, bergso_in. Without them wetdepa_v2 uses
+            ! partial-evaporation resuspension and no Bergeron correction (as FANCI did before).
+
+        end subroutine scavenge
+
+        ! apply a cloud-borne tendency in place, without going below zero
+        subroutine update_cldbrne( fld, dqdt )
+
+            real(r8), intent(inout) :: fld(:,:)            ! cloud-borne field (in the state object)
+            real(r8), intent(inout) :: dqdt(pcols,pver)    ! tendency; reduced where it would go negative
+
+            where ( fld(:ncol,:) + dqdt(:ncol,:)*dt < 0._r8 ) dqdt(:ncol,:) = -fld(:ncol,:)/dt
+            fld(:ncol,:) = fld(:ncol,:) + dqdt(:ncol,:)*dt
+
+        end subroutine update_cldbrne
+
+        ! history output and surface fluxes for one tracer
+        subroutine wetdep_output( name, ndx, cldbrn, dqdt, ic, is, bc, bs, insol )
+
+            character(len=*), intent(in) :: name   ! tracer name (interstitial or cloud-borne)
+            integer,  intent(in) :: ndx            ! constituent index of the interstitial tracer
+            logical,  intent(in) :: cldbrn         ! .true. for cloud-borne
+            real(r8), intent(in) :: dqdt(pcols,pver)
+            real(r8), intent(in) :: ic(pcols,pver), is(pcols,pver), bc(pcols,pver), bs(pcols,pver)
+            real(r8), intent(in) :: insol(pcols,pver)
+
+            real(r8) :: flx(pcols)
+
+            call outfld( trim(name)//'WET', dqdt,  pcols, lchnk )
+            call outfld( trim(name)//'SIC', ic,    pcols, lchnk )
+            call outfld( trim(name)//'SIS', is,    pcols, lchnk )
+            call outfld( trim(name)//'SBC', bc,    pcols, lchnk )
+            call outfld( trim(name)//'SBS', bs,    pcols, lchnk )
+            call outfld( trim(name)//'INS', insol, pcols, lchnk )
+
+            call column_integral( dqdt, flx )
+            if ( cldbrn ) then
+                call outfld( trim(name)//'SFWET', flx, pcols, lchnk )
+                aerdepwetcw(:ncol,ndx) = flx(:ncol)
+            else
+                aerdepwetis(:ncol,ndx) = aerdepwetis(:ncol,ndx) + flx(:ncol)
+                call outfld( trim(name)//'SFWET', aerdepwetis(:ncol,ndx), ncol, lchnk )
+            end if
+
+            call column_integral( ic, flx )
+            call outfld( trim(name)//'SFSIC', flx, pcols, lchnk )
+            call column_integral( is, flx )
+            call outfld( trim(name)//'SFSIS', flx, pcols, lchnk )
+            call column_integral( bc, flx )
+            call outfld( trim(name)//'SFSBC', flx, pcols, lchnk )
+            call column_integral( bs, flx )
+            call outfld( trim(name)//'SFSBS', flx, pcols, lchnk )
+
+        end subroutine wetdep_output
+
+        ! column integral of a tendency (kg/kg/s) -> flux (kg/m2/s)
+        subroutine column_integral( tend, flux )
+
+            real(r8), intent(in)  :: tend(:,:)
+            real(r8), intent(out) :: flux(:)
+
+            integer :: kk
+
+            flux = 0._r8
+            do kk = 1, pver
+                flux(:ncol) = flux(:ncol) + tend(:ncol,kk)*state%pdel(:ncol,kk)/gravit
+            end do
+
+        end subroutine column_integral
+
+        ! below cloud impaction scavenging coefs
+        subroutine get_bcscavcoefs( m, ncol, isprx, diam_wet, scavcoefnum, scavcoefvol )
+
+            integer,intent(in)      :: m, ncol              ! bin number, column
+            logical,intent(in)      :: isprx(:,:)           ! is precip? if not, returns 0
+            real(r8), intent(in)    :: diam_wet(:,:)        ! wet diameter for bin [m]
+            real(r8), intent(out)   :: scavcoefnum(:,:), scavcoefvol(:,:)
+
+            integer i, k, jgrow
+            real(r8) dumdgratio, xgrow, dumfhi, dumflo, scavimpvol, scavimpnum
+
+            do k = 1, pver
+               do i = 1, ncol
+
+                  ! do only if no precip
+                  if ( isprx(i,k) .and. diam_wet(i,k)>0.0_r8) then
+                     !
+                     ! interpolate table values using log of (actual-wet-size)/(base-dry-size)
+
+                     dumdgratio = diam_wet(i,k)/aero_props%scav_diam(m)
+                     if ((dumdgratio >= 0.99_r8) .and. (dumdgratio <= 1.01_r8)) then
+                        scavimpvol = scavimptblvol(0,m)
+                        scavimpnum = scavimptblnum(0,m)
+                     else
+                        xgrow = log( dumdgratio ) / dlndg_nimptblgrow
+                        jgrow = int( xgrow )
+                        if (xgrow < 0._r8) jgrow = jgrow - 1
+                        if (jgrow < nimptblgrow_mind) then
+                           jgrow = nimptblgrow_mind
+                           xgrow = jgrow
+                        else
+                           jgrow = min( jgrow, nimptblgrow_maxd-1 )
+                        end if
+
+                        dumfhi = xgrow - jgrow
+                        dumflo = 1._r8 - dumfhi
+
+                        scavimpvol = dumflo*scavimptblvol(jgrow,m) + &
+                                     dumfhi*scavimptblvol(jgrow+1,m)
+                        scavimpnum = dumflo*scavimptblnum(jgrow,m) + &
+                                     dumfhi*scavimptblnum(jgrow+1,m)
+
+                     end if
+
+                     ! impaction scavenging removal amount for volume
+                     scavcoefvol(i,k) = exp( scavimpvol )
+                     ! impaction scavenging removal amount to number
+                     scavcoefnum(i,k) = exp( scavimpnum )
+
+                  else
+                     scavcoefvol(i,k) = 0._r8
+                     scavcoefnum(i,k) = 0._r8
+                  end if
+
+               end do
+            end do
+
+        end subroutine get_bcscavcoefs
 
   end subroutine aero_wetdep_tend
 

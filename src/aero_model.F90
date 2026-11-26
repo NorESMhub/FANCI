@@ -617,13 +617,32 @@ end function aero_model_get_state
       type(cam_out_t),     intent(inout) :: cam_out     ! export state
       type(physics_ptend), intent(out)   :: ptend       ! indivdual parameterization tendencies
       type(physics_buffer_desc), pointer :: pbuf(:)
-                 integer  :: lchnk                    ! chunk identifier
+      integer  :: lchnk                    ! chunk identifier
+      integer  :: ibin, irange, ispec, ncol
+      real(r8) :: tmp(pcols,pver)
+      real(r8), pointer :: cw(:,:)
       lchnk = state%lchnk
 
       ! smb: TODO REMOVE THIS.
       !if (nwetdep<1) return
       call aero_wetdep_tend(state, dt, dlf, cam_out, ptend, pbuf)
+      ncol = state%ncol
+      tmp = 0._r8
+      do ibin = 1, aero_props%nbins()
+          call master_aero_state(lchnk)%ptr%get_cldbrne_num(ibin, cw)
+          tmp(:ncol,:) = cw(:ncol,:)
+          call outfld('num_'//trim(int2str(ibin))//'_cw', tmp, pcols, lchnk)
+      end do
 
+      do irange = 1, aero_props%nranges()
+          ibin = aero_props%range_bounds(irange, 1)           ! range-leader bin
+          do ispec = 1, aero_props%range_nspecies(irange)
+              call master_aero_state(lchnk)%ptr%get_cldbrne_mmr(ispec, ibin, cw)
+              tmp(:ncol,:) = cw(:ncol,:)
+              call outfld(trim(master_aero_state(lchnk)%ptr%aero_range_state(irange)%range_name(ispec))//'_cw', &
+                      tmp, pcols, lchnk)
+          end do
+      end do
   end subroutine aero_model_wetdep
 !           use wetdep,        only : wetdepa_v1, wetdep_inputs_set, wetdep_inputs_t
 !

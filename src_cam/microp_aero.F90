@@ -910,7 +910,13 @@ subroutine microp_aero_run ( &
       deallocate(factnum)
    end if
 
-   if (associated(aero_state1_obj)) then
+   if (associated(aero_state1_obj)) then                  
+      ! the FANCI copy holds the updated cloud-borne aerosol; hand it back to the
+      ! master before the copy is destroyed so it persists to the next time step
+      select type (s => aero_state1_obj)
+      type is (fanci_aerosol_state)
+         call s%commit_cloudborne()
+      end select
       ! destroy the aerosol state object
       deallocate(aero_state1_obj)
       nullify(aero_state1_obj)
