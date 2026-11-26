@@ -716,10 +716,10 @@ if (masterproc) then
         ! below cloud impaction scavenging coefs
         subroutine get_bcscavcoefs( m, ncol, isprx, diam_wet, scavcoefnum, scavcoefvol )
 
-            integer,intent(in) :: m, ncol
-            logical,intent(in):: isprx(:,:)
-            real(r8), intent(in) :: diam_wet(:,:)
-            real(r8), intent(out) :: scavcoefnum(:,:), scavcoefvol(:,:)
+            integer,intent(in)      :: m, ncol              ! bin number, column
+            logical,intent(in)      :: isprx(:,:)           ! is precip? if not, returns 0
+            real(r8), intent(in)    :: diam_wet(:,:)        ! wet diameter for bin [m]
+            real(r8), intent(out)   :: scavcoefnum(:,:), scavcoefvol(:,:)
 
             integer i, k, jgrow
             real(r8) dumdgratio, xgrow, dumfhi, dumflo, scavimpvol, scavimpnum
