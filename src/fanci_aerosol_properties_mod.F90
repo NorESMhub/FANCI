@@ -1378,7 +1378,7 @@ end if
   end function bin_name
 
   !------------------------------------------------------------------------------
-  ! returns scavenging diameter (cm) for a given aerosol bin number
+  ! returns scavenging diameter (m) for a given aerosol bin number
   !------------------------------------------------------------------------------
   function scav_diam(self, bin_ndx) result(diam)
     use modal_aero_data, only: dgnum_amode
@@ -1386,11 +1386,11 @@ end if
     class(fanci_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx  ! bin number
 
-    real(r8) :: diam
+    real(r8) :: diam    ! m
 
     character(len=*), parameter :: subname = 'scav_diam'
 
-    diam = self%bin_centers_(bin_ndx) * 100._r8 * 2._r8  ! convert to cm
+    diam = self%bin_centers_(bin_ndx) * 2._r8  ! radius to diameter
 
   end function scav_diam
 
